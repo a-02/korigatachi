@@ -5,6 +5,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ExplicitForAll #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Korigatachi.Instruction where
 
@@ -29,16 +30,18 @@ type family
 
 data Env = Env
 
-asl operand =
+asl :: forall i i2 r . String -> (forall j j2 . Atari (MachineState i i2) (MachineState j j2) -> r) -> r
+asl operand fun =
   case operand of
-    "hi" -> a23
-    "uh" -> a64
+    "hi" -> fun a23
+    "uh" -> fun a64
 
 a23 :: Atari (MachineState i j) (MachineState (i + 2) (i + 3))
 a23 = undefined
 
 a64 :: Atari (MachineState i j) (MachineState (i + 6) (i + 3))
 a64 = undefined
+
 
 data Instruction = Instruction
   { shorthand :: Shorthand
