@@ -1,44 +1,300 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE ExplicitForAll #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
 
-module Korigatachi.Instruction where
+module Korigatachi.Model where
 
-import qualified Data.Text as T
-import Data.Word (Word8)
-import GHC.TypeLits
+-- finite-typelits
+import Data.Finite (finite)
+
+-- insert-ordered-containers
+import Data.HashMap.Strict.InsOrd as InsOrd
+
+-- text
+import Data.Text qualified as T
+
+-- sized-vector
+import Data.Vector.Sized ((//))
+import Data.Vector.Sized qualified as Sized
+
+import Data.Word (Word16, Word8)
+import GHC.Generics qualified as Generic
 
 import Korigatachi.Monad
 
-type Atari i j = RWIPT Env () IO i j ()
+-- | From the Japanese for "congealed shape". The monad to rule them all.
+type Korigatachi a = RWIT Env Katteyomi IO Atari Atari a
 
-data MachineState (bytes :: Nat) (cycles :: Nat) = MachineState
+-- | From the Japanese for "selfish reading". The data structure for the writer.
+data Katteyomi = Katteyomi
+  { logs :: T.Text
+  , codegen :: T.Text
+  }
+  deriving (Generic.Generic)
 
-type family
-  Combine
-    (i :: MachineState (b1 :: Nat) (c1 :: Nat))
-    (j :: MachineState (b2 :: Nat) (c2 :: Nat))
-    :: k
-  where
-  Combine (i :: MachineState b1 c1) (j :: MachineState b2 c2) =
-    MachineState (b1 + c1) (b2 + c2)
+instance Semigroup Katteyomi where
+  k1 <> k2 = Katteyomi (logs k1 <> logs k2) (codegen k1 <> codegen k2)
+
+instance Monoid Katteyomi where
+  mempty = Katteyomi "" ""
+
+-- | Write to the writer.
+katteyomi :: T.Text -> T.Text -> Korigatachi ()
+katteyomi logMsg codeGen = tell (Katteyomi logMsg codeGen)
+
+data ProgramState =
+  Running Atari |
+  Jammed Atari |
+  Error KorigatachiError |
+  Stopped
+
+data KorigatachiError
+
+data Atari = Atari
+  { ram :: Memory
+  -- ^ A whopping 128 bytes of RAM.
+  , cpu :: MOS6507
+  -- ^ A 6502 with the last 4 pins cut off. Costs $12 in 1977 money.
+  , rom :: Memory4K
+  -- ^ Read-only memory.
+  , tv :: TV
+  -- ^ The TV your Atari is plugged into.
+  , tia :: TIA
+  -- ^ Television Interface Adapter.
+  , pia :: PIA
+  {- ^ Off-the-shelf 6532 Peripheral Interface Adapter.
+  Technically, the RAM is controlled by this chip, but
+  it's easier to abstract the RAM to a seperate field.
+  -}
+  }
+  deriving (Generic.Generic)
+
+{- | The Atari 2600 only had 128 bytes of RAM.
+Frankly, I'm stunned it even has that much.
+We can't even use some of these, maybe some type level
+synonym is in order that has a list of fields we can't use.
+-}
+type Memory = Sized.Vector 128 Word8
+
+updateMemory :: Memory -> Word8 -> Word8 -> Either T.Text Memory
+updateMemory memory w8 address =
+  if address < 128 -- RAM lives in $80-$FF.
+    then
+      Left
+        "Tried to write to a RAM byte below $80. Perhaps you meant to write to a TIA register?"
+    else
+      Right $ memory // [(finite . fromIntegral $ address - 128, w8)] -- Minus 128 to get it in the sized range.
+
+{- | I know some carts can bank-switch into having more ROM, but
+the 6507 can only see 4K at a time. (or is it 8K?)
+-}
+data Memory4K = Memory4K
+  { memory4k :: Sized.Vector 4096 Word8
+  , focus :: Integer
+  {- ^ Should be a Word12, but no one cares about Word12s. Set this to -1 initially.
+  The focus should always be on the next word8 to be edited, not the word that was just edited.
+  -}
+  }
+
+-- | You don't "burn" memory onto an Atari, especially not to an EPROM chip.
+updateRom :: Memory4K -> Word8 -> Either T.Text Memory4K
+updateRom rom4k w8 =
+  if rom4k.focus + 1 >= 4096 -- 0-indexed, remember?
+    then
+      Left "ROM Overflow."
+    else
+      Right $
+        Memory4K
+          (rom4k.memory4k // [(finite rom4k.focus, w8)])
+          (rom4k.focus + 1) -- Hey, this can overflow! Maybe add some error-checking?
+
+{- | The Atari and the TV are so intertwined that you can't really have one
+without the other.
+
+Technically, counting things on the TV is a mixed radix system.
+
+Frame - Line - HPos have bases Inf, 262, 76.
+
+How many cycles have passed is just
+  (Frame * 19912) + (Line * 76) + HPos 
+
+-}
+data TV = TV
+  { frame :: Int
+  , section :: Section
+  , line :: Int
+  -- ^ vertical position, 0-261 for NTSC.
+  -- 
+  , hPos :: Int
+  {- ^ horizontal position, 68 "pixels" of hblank, 160 pixels of color
+  one cpu cycle is 3 "pixels", so we get 76 cycles per line. This is 0-indexed.
+  -}
+  , region :: Region
+  }
+  deriving (Generic.Generic)
+
+advanceTV :: Int -> TV -> TV
+advanceTV cyclesToAdvance television =
+  let
+    current = (television.frame * 19912) + (television.line * 76) + television.hPos
+    advanced = current + cyclesToAdvance
+    (advFrame, remFrame) = advanced `quotRem` 19912 -- 262 * 76
+    (advLine, advHPos) = remFrame `quotRem` 76 -- 76 :P
+  in
+    TV
+      { frame = advFrame
+      , section = television.section -- TODO: Actually update the section.
+      , line = advLine
+      , hPos = advHPos
+      , region = television.region -- Imagine changing the region of a console while it's on.
+      }
+
+data PIA = PIA
+  { swcha :: Word8
+  -- ^ \$280, Port A; input or output (read or write)
+  , swacnt :: Word8
+  -- ^ \$281, Port A DDR, 0= input, 1=output
+  , swchb :: Word8
+  -- ^ \$282, Port B; console switches (read only)
+  , swbcnt :: Word8
+  -- ^ \$283, Port B DDR (hardwired as input)
+  , intim :: Word8
+  -- ^ \$284, Timer output (read only)
+  , tim1t :: Word8
+  -- ^ \$294, set 1 clock interval (838 nsec/interval)
+  , tim8t :: Word8
+  -- ^ \$295, set 8 clock interval (6.7 usec/interval)
+  , tim64t :: Word8
+  -- ^ \$296, set 64 clock interval (53.6 usec/interval)
+  , t1024t :: Word8
+  -- ^ \$297, set 1024 clock interval (858.2 usec/interval)
+  }
+  deriving (Generic.Generic)
+
+data TIA = TIA
+  { vsync :: Word8
+  -- ^ \$00 - ......1. - vertical sync set-clear
+  , vblank :: Word8
+  -- ^ \$01 - 11....1. - vertical blank set-clear
+  , wsync :: Word8
+  -- ^ \$02 - strobe - wait for leading edge of horizontal blank
+  , rsync :: Word8
+  -- ^ \$03 - strobe - reset horizontal sync counter
+  , nusiz0 :: Word8
+  -- ^ number-size player-missile 0
+  , nusiz1 :: Word8
+  -- ^ number-size player-missile 1
+  , colup0 :: Word8
+  -- ^ color-lum player 0
+  , colup1 :: Word8
+  -- ^ color-lum player 1
+  , colupf :: Word8
+  -- ^ color-lum playfield
+  , colubk :: Word8
+  -- ^ color-lum background
+  , ctrlpf :: Word8
+  -- ^ control playfield ball size & collisions
+  , refp0 :: Word8
+  -- ^ reflect player 0
+  , refp1 :: Word8
+  -- ^ reflect player 1
+  , pf0 :: Word8
+  -- ^ playfield register byte 0
+  , pf1 :: Word8
+  -- ^ playfield register byte 1
+  , pf2 :: Word8
+  -- ^ playfield register byte 2
+  , resp0 :: Word8
+  -- ^ reset player 0
+  , resp1 :: Word8
+  -- ^ reset player 1
+  , resm0 :: Word8
+  -- ^ reset missile 0
+  , resm1 :: Word8
+  -- ^ reset missile 1
+  , resbl :: Word8
+  -- ^ reset ball
+  , audc0 :: Word8
+  -- ^ audio control 0
+  , audc1 :: Word8
+  -- ^ audio control 1
+  , audf0 :: Word8
+  -- ^ audio frequency 0
+  , audf1 :: Word8
+  -- ^ audio frequency 1
+  , audv0 :: Word8
+  -- ^ audio volume 0
+  , audv1 :: Word8
+  -- ^ audio volume 1
+  , grp0 :: Word8
+  -- ^ graphics player 0
+  , grp1 :: Word8
+  -- ^ graphics player 1
+  , enam0 :: Word8
+  -- ^ graphics (enable) missile 0
+  , enam1 :: Word8
+  -- ^ graphics (enable) missile 1
+  , enabl :: Word8
+  -- ^ graphics (enable) ball
+  , hmp0 :: Word8
+  -- ^ horizontal motion player 0
+  , hmp1 :: Word8
+  -- ^ horizontal motion player 1
+  , hmm0 :: Word8
+  -- ^ horizontal motion missile 0
+  , hmm1 :: Word8
+  -- ^ horizontal motion missile 1
+  , hmbl :: Word8
+  -- ^ horizontal motion ball
+  , vdelp0 :: Word8
+  -- ^ vertical delay player 0
+  , vdelp1 :: Word8
+  -- ^ vertical delay player 1
+  , vdelbl :: Word8
+  -- ^ vertical delay ball
+  , resmp0 :: Word8
+  -- ^ reset missile 0 to player 0
+  , resmp1 :: Word8
+  -- ^ reset missile 1 to player 1
+  , hmove :: Word8
+  -- ^ apply horizontal motion
+  , hmclr :: Word8
+  -- ^ clear horizontal motion registers
+  , csclr :: Word8
+  -- ^ clear collision latches
+  }
+  deriving (Generic.Generic)
+
+data Region = NTSC | PAL | SECAM -- we're only supporting NTSC for rn.
+
+-- | Abstract representation of where on the TV screen the beam is.
+data Section = VSync | VBlank | HBlank | Color | Overscan
+
+data MOS6507 = MOS6507
+  { generalRegisters :: Registers
+  , programCounter :: Word16
+  , stackPointer :: Word8
+  , statusRegister :: Flags
+  , cpuCycle :: Int
+  }
+  deriving (Generic.Generic)
+
+data Registers = Registers
+  { a :: Word8
+  , x :: Word8
+  , y :: Word8
+  }
+  deriving (Generic.Generic)
 
 data Env = Env
+  { assembler :: Switch
+  , emulator :: Switch
+  , display :: Switch
+  }
 
-asl operand =
-  case operand of
-    "hi" -> a23
-    "uh" -> a64
-
-a23 :: Atari (MachineState i j) (MachineState (i + 2) (i + 3))
-a23 = undefined
-
-a64 :: Atari (MachineState i j) (MachineState (i + 6) (i + 3))
-a64 = undefined
+data Switch = On | Off
 
 data Instruction = Instruction
   { shorthand :: Shorthand
@@ -64,6 +320,7 @@ data AddressingMode
   | AbsoluteX
   | AbsoluteY
   | Indirect
+  deriving (Eq)
 
 data Flags
   = Flags
@@ -159,8 +416,10 @@ data Shorthand
   | UBC
   deriving (Eq, Ord, Show)
 
-validInstructions :: [Instruction]
-validInstructions =
+type ValidInstructions = InsOrd.InsOrdHashMap Word8 Instruction
+
+validInstructions :: InsOrd.InsOrdHashMap Word8 Instruction
+validInstructions = InsOrd.fromList $ zip ([0..255] :: [Word8])
   [ Instruction BRK Implied 0x00 1 7 emptyFlags "Force Break"
   , Instruction ORA IndirectX 0x01 2 6 emptyFlags "OR Memory with Accumulator"
   , Instruction JAM Implied 0x02 0 0 emptyFlags "Freeze the CPU"
@@ -417,3 +676,46 @@ validInstructions =
   , Instruction INC AbsoluteX 0xFE 3 7 emptyFlags "Increment Memory by One"
   , Instruction ISC AbsoluteX 0xFF 3 7 emptyFlags "INC oper + CMP oper"
   ]
+
+jamInstruction :: Instruction
+jamInstruction = Instruction JAM Implied 0x02 0 0 emptyFlags "Freeze the CPU"
+-- Something that might be able to be done is bounds-checking as a CONSTRAINT, but prolly not.
+
+-- This mess is commented out because it is fundamentally flawed.
+-- In order to get some functionality to the type-level, such as bounds-checking
+-- or instruction validation, we would need to put the whole emulator at the type level.
+-- Which is not something I want to do. The syntax is bad enough.
+
+-- type Atari i j = RWIPT Env () IO i j ()
+-- data MachineState (bytes :: Nat) (cycles :: Nat) = MachineState
+
+-- type family
+--   Combine
+--     (i :: MachineState (b1 :: Nat) (c1 :: Nat))
+--     (j :: MachineState (b2 :: Nat) (c2 :: Nat))
+--     :: k
+--   where
+--   Combine (i :: MachineState b1 c1) (j :: MachineState b2 c2) =
+--     MachineState (b1 + c1) (b2 + c2)
+
+-- data Env = Env
+
+-- asl :: forall i i2 r . String -> (forall j j2 . Atari (MachineState i i2) (MachineState j j2) -> r) -> r
+-- asl operand fn =
+--   case operand of
+--     "" -> fn a23
+--     _ -> fn a64
+
+-- a23 :: Atari (MachineState i j) (MachineState (i + 2) (i + 3))
+-- a23 = undefined
+
+-- a64 :: Atari (MachineState i j) (MachineState (i + 6) (i + 3))
+-- a64 = undefined
+--
+{-
+Address Range | Function
+\$0000 - $007F | TIA registers (only 00-2F are used)
+\$0080 - $00FF | RAM
+\$0200 - $02FF | RIOT registers (only 280-297 are used)
+\$F000 - $FFFF | ROM
+-}

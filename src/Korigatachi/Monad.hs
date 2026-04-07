@@ -1,10 +1,10 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Korigatachi.Monad where
 
@@ -15,16 +15,17 @@ module Korigatachi.Monad where
 (<&>) :: Functor f => f a -> (a -> b) -> f b
 (<&>) = flip fmap
 
--- | A monad transformer adding an environment of type @r@,
--- collecting state between types @i@ and @j@, and writing to an
--- output of type @w@.
---
--- This is the value level version of RWIT.
--- For a version that carries its state at the type level only,
--- see RWIPT.
-newtype RWIT r w m i j a = RWIT { runRWIT :: r -> i -> m (a, j, w) }
+{- | A monad transformer adding an environment of type @r@,
+collecting state between types @i@ and @j@, and writing to an
+output of type @w@.
 
-instance (Functor m) => Functor (RWIT r w m i j) where
+This is the value level version of RWIT.
+For a version that carries its state at the type level only,
+see RWIPT.
+-}
+newtype RWIT r w m i j a = RWIT {runRWIT :: r -> i -> m (a, j, w)}
+
+instance Functor m => Functor (RWIT r w m i j) where
   fmap :: (a -> b) -> RWIT r w m i j a -> RWIT r w m i j b
   fmap f (RWIT k) = RWIT $ \r i -> k r i <&> \case (a, j, w) -> (f a, j, w)
 
@@ -45,6 +46,10 @@ class IndexedMonad m where
 (>>=) :: IndexedMonad m => m i j a -> (a -> m j k b) -> m i k b
 (>>=) = ixbind
 
+-- | ahahahahaha
+(>>) :: IndexedMonad m => m i j a -> m j k b -> m i k b
+(>>) = (. const) . ixbind
+
 instance (Monad m, Monoid w) => IndexedMonad (RWIT r w m) where
   ixbind m f =
     RWIT $ \r i -> do
@@ -52,14 +57,33 @@ instance (Monad m, Monoid w) => IndexedMonad (RWIT r w m) where
       ~(b, k, w') <- runRWIT (f a) r j
       pure (b, k, w <> w')
 
--- | A monad transformer adding an environment of type @r@,
--- collecting state between phantom types @i@ and @j@,
--- and writing to an output of type @w@.
---
--- This is the type level version of RWIT.
-newtype RWIPT r w m i j a = RWIPT { runRWIPT :: r -> m (a, w) }
+ask :: (Monoid w, Monad m) => RWIT r w m i i r
+ask = RWIT $ \r i -> pure (r, i, mempty)
 
-instance (Functor m) => Functor (RWIPT r w m i j) where
+get :: (Monoid w, Monad m) => RWIT r w m i i i
+get = RWIT $ \_ i -> pure (i, i, mempty)
+
+put :: (Monoid w, Monad m) => j -> RWIT r w m i j ()
+put j = RWIT $ \_ _ -> pure ((), j, mempty)
+
+modify :: (Monoid w, Monad m) => (i -> j) -> RWIT r w m i j ()
+modify f = RWIT $ \_ i -> pure ((), f i, mempty)
+
+writer :: (Monoid w, Monad m) => (a, w) -> RWIT r w m i i a
+writer (a, w) = RWIT $ \_ i -> pure (a, i, w)
+
+tell :: (Monoid w, Monad m) => w -> RWIT r w m i i ()
+tell w = writer ((), w)
+
+{- | A monad transformer adding an environment of type @r@,
+collecting state between phantom types @i@ and @j@,
+and writing to an output of type @w@.
+
+This is the type level version of RWIT.
+-}
+newtype RWIPT r w m i j a = RWIPT {runRWIPT :: r -> m (a, w)}
+
+instance Functor m => Functor (RWIPT r w m i j) where
   fmap :: (a -> b) -> RWIPT r w m i j a -> RWIPT r w m i j b
   fmap f (RWIPT k) = RWIPT (fmap (\case (a, w) -> (f a, w)) . k)
 
@@ -79,6 +103,3 @@ instance (Monad m, Monoid w) => IndexedMonad (RWIPT r w m) where
       ~(a, v) <- runRWIPT m r
       ~(b, w) <- runRWIPT (f a) r
       pure (b, v <> w)
-
-
-

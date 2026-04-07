@@ -61,7 +61,10 @@ library
     -- Modules exported by the library.
     exposed-modules:
         Korigatachi
-        Korigatachi.Instruction
+        Korigatachi.Assembly
+        Korigatachi.Comonad
+        Korigatachi.Control
+        Korigatachi.Model
         Korigatachi.Monad
 
     -- Modules included in this library but not exported.
@@ -72,11 +75,19 @@ library
 
     -- Other library packages from which modules are imported.
     build-depends:
+        attoparsec,
         base,
+        bytestring,
+        finite-typelits,
+        insert-ordered-containers,
+        mono-traversable,
+        optics,
         text,
         template-haskell,
         th-lift,
-        transformers
+        transformers,
+        vector-sized,
+        brillo
 
     -- Directories containing source files.
     hs-source-dirs:   src

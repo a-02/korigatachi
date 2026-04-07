@@ -1,0 +1,10 @@
+cradle:
+  cabal:
+    - path: "src"
+      component: "lib:korigatachi"
+
+    - path: "app/Main.hs"
+      component: "korigatachi:exe:korigatachi"
+
+    - path: "test"
+      component: "korigatachi:test:korigatachi-test"
