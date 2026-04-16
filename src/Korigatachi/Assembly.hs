@@ -53,7 +53,6 @@ start = K.do
   sei
   cld
   ldx "#$FF"
-  
 
 -- sei -- Set Interrupt Disable Flag.
 -- cld
@@ -69,14 +68,13 @@ ldx opr = case lookupInstruction LDX opr of
     env <- K.ask
     K.when env.assembler $ K.do
       K.katteyomi "" (T.pack $ "ldx " <> opr ^. oprIso)
-      writeROMInternal instruction.opcode
-      writeROM opr
+      assembleROMInternal instruction.opcode
+      assembleROM opr
     K.when env.emulator $ K.do
       atari <- K.get
-      writeRAM atari.cpu.generalRegisters.a opr
+      write atari.cpu.generalRegisters.a opr
     K.when env.display $ K.do
-      K.modify (\atari -> atari {K.tv = K.advanceTV instruction.cycles atari.tv})
-
+      advanceTV instruction
 
 cld :: Korigatachi ()
 cld = case lookupInstruction SEI Implied of
@@ -86,11 +84,11 @@ cld = case lookupInstruction SEI Implied of
     env <- K.ask
     K.when env.assembler $ K.do
       K.katteyomi "" "cld"
-      writeROMInternal instruction.opcode
+      assembleROMInternal instruction.opcode
     K.when env.emulator $ K.do
       clearFlags 8
     K.when env.display $ K.do
-      K.modify (\atari -> atari {K.tv = K.advanceTV instruction.cycles atari.tv})
+      advanceTV instruction
 
 sei :: Korigatachi ()
 sei = case lookupInstruction SEI Implied of
@@ -100,13 +98,12 @@ sei = case lookupInstruction SEI Implied of
     env <- K.ask
     K.when env.assembler $ K.do
       K.katteyomi "" "sei"
-      writeROMInternal instruction.opcode
+      assembleROMInternal instruction.opcode
     K.when env.emulator $ K.do
       setFlags 4
-      -- I'm doing this just because it's funny.
-      -- This is the same as setFlags 0b00000100
+    -- This is the same as setFlags 0b00000100
     K.when env.display $ K.do
-      K.modify (\atari -> atari {K.tv = K.advanceTV instruction.cycles atari.tv})
+      advanceTV instruction
 
 sta :: Operand -> Korigatachi ()
 sta opr = case lookupInstruction STA opr of
@@ -116,13 +113,17 @@ sta opr = case lookupInstruction STA opr of
     env <- K.ask
     K.when env.assembler $ K.do
       K.katteyomi "" (T.pack $ "sta " <> opr ^. oprIso)
-      writeROMInternal instruction.opcode
-      writeROM opr
+      assembleROMInternal instruction.opcode
+      assembleROM opr
     K.when env.emulator $ K.do
       atari <- K.get
-      writeRAM atari.cpu.generalRegisters.a opr
+      write atari.cpu.generalRegisters.a opr
     K.when env.display $ K.do
-      K.modify (\atari -> atari {K.tv = K.advanceTV instruction.cycles atari.tv})
+      advanceTV instruction
+
+advanceTV :: K.Instruction -> Korigatachi ()
+advanceTV ins =
+  K.modify (\atari -> atari {K.tv = K.advanceTV ins.cycles atari.tv})
 
 -- Weird trick: change the transition state and then just put it back later.
 -- K.do
@@ -155,9 +156,9 @@ writeRAMInternal w8 memoryAddress = K.do
     Right mem ->
       K.put (atari & #ram .~ mem)
 
--- | Write to ROM.
-writeROMInternal :: Word8 -> Korigatachi ()
-writeROMInternal w8 = K.do
+-- | Assemble ROM incrementally.
+assembleROMInternal :: Word8 -> Korigatachi ()
+assembleROMInternal w8 = K.do
   atari <- K.get
   case K.updateRom atari.rom w8 of
     Left err -> K.katteyomi err ""
@@ -172,9 +173,10 @@ setFlags flagsW8 = K.do
     newFlags = flagsIso # (flagsW8 .|. (atari.cpu.statusRegister ^. flagsIso))
   K.put atari {K.cpu = atari ^. #cpu & #statusRegister .~ newFlags}
 
--- | TODO: Lensify this better.
--- ???
--- clearFlags flags = K.modify $ #cpu . #statusRegister . flagsIso %~ (.&. complement flags)
+{- | TODO: Lensify this better.
+???
+clearFlags flags = K.modify $ #cpu . #statusRegister . flagsIso %~ (.&. complement flags)
+-}
 clearFlags :: Word8 -> Korigatachi ()
 clearFlags flagsW8 = K.do
   atari <- K.get
@@ -184,68 +186,70 @@ clearFlags flagsW8 = K.do
 
 -- Do the addressing mode calculations here, pass off to necessary writing functions.
 write :: Word8 -> Operand -> Korigatachi ()
-write val opr = case opr of
-  undefined
+write val opr = K.do
+  oprW16 <- operandToWord16 opr
+  let
+    go
+      | oprW16 >= 0x00 && oprW16 <= 0x2C = writeTIA val oprW16 -- TIA registers
+      | oprW16 >= 0x80 && oprW16 <= 0xFF = writeRAMInternal val (fromIntegral oprW16)
+      | oprW16 >= 0x280 && oprW16 <= 0x297 = writePIA val oprW16 -- PIA registers
+      | oprW16 >= 0xF000 && oprW16 <= 0xFFFF -- ROM
+        =
+          K.katteyomi "Attempted to write to ROM?!" ""
+      | otherwise = K.ixpure ()
+  go
 
--- | TODO: Write out all the varying addressing mode behavior for writeOperandRAM and writeOperandROM
-writeRAM :: Word8 -> Operand -> Korigatachi ()
-writeRAM val opr = case opr of
+writeTIA :: Word8 -> Word16 -> Korigatachi ()
+writeTIA val oprW16 = undefined
+
+writePIA :: Word8 -> Word16 -> Korigatachi ()
+writePIA val oprW16 = K.do
+  case oprW16 of
+    0x280 -> K.modify $ #pia % #swcha .~ val
+    0x281 -> K.modify $ #pia % #swacnt .~ val
+    0x282 -> K.katteyomi "SWCHB ($282) is read-only." ""
+    0x283 -> K.katteyomi "SWBCNT ($283) is read-only." ""
+    0x284 -> K.katteyomi "INTIM ($284) is read-only." ""
+    0x294 -> K.modify $ #pia % #tim1t .~ val
+    0x295 -> K.modify $ #pia % #tim8t .~ val
+    0x296 -> K.modify $ #pia % #tim64t .~ val
+    0x297 -> K.modify $ #pia % #t1024t .~ val
+    _ -> K.katteyomi ("Attempted to write to invalid PIA register: " <> T.pack (oprW16 ^. K.hex16)) ""
+
+{- | Writing to ROM doesn't follow addressing mode specificities since its not an action
+undertaken by the Atari itself, rather us creating a binary. All we care are how many bytes
+written to ROM.
+-}
+assembleROM :: Operand -> Korigatachi ()
+assembleROM = \case
   Accumulator -> K.ixpure ()
   Implied -> K.ixpure ()
-  Immediate w8 -> writeRAMInternal val w8
-  IndirectX w8 -> writeRAMInternal val w8
-  IndirectY w8 -> writeRAMInternal val w8
-  Relative w8 -> writeRAMInternal val w8
-  ZeroPage w8 -> writeRAMInternal val w8
-  ZeroPageX w8 -> K.do
-    atari <- K.get
-    writeRAMInternal val (w8 + atari.cpu.generalRegisters.x)
-  ZeroPageY w8 -> K.do
-    atari <- K.get
-    writeRAMInternal val (w8 + atari.cpu.generalRegisters.y)
-  Absolute _ _ ->
-    K.katteyomi "The Atari can only access 128 bytes of RAM. What are you doing trying to access a 16-bit memory address?" ""
-  AbsoluteX _ _ ->
-    K.katteyomi "The Atari can only access 128 bytes of RAM. What are you doing trying to access a 16-bit memory address?" ""
-  AbsoluteY _ _ ->
-    K.katteyomi "The Atari can only access 128 bytes of RAM. What are you doing trying to access a 16-bit memory address?" ""
-  Indirect _ _ ->
-    K.katteyomi "The Atari can only access 128 bytes of RAM. What are you doing trying to access a 16-bit memory address?" ""
-  Unrecognized err -> K.katteyomi (T.pack err) ""
-
--- | Writing to ROM doesn't follow addressing mode specificities since its not an action
--- undertaken by the Atari itself, rather us creating a binary. All we care are how many bytes
--- written to ROM.
-writeROM :: Operand -> Korigatachi ()
-writeROM = \case
-  Accumulator -> K.ixpure ()
-  Implied -> K.ixpure ()
-  Immediate w8 -> writeROMInternal w8
-  IndirectX w8 -> writeROMInternal w8
-  IndirectY w8 -> writeROMInternal w8
-  Relative w8 -> writeROMInternal w8
-  ZeroPage w8 -> writeROMInternal w8
-  ZeroPageX w8 -> writeROMInternal w8
-  ZeroPageY w8 -> writeROMInternal w8
+  Immediate w8 -> assembleROMInternal w8
+  IndirectX w8 -> assembleROMInternal w8
+  IndirectY w8 -> assembleROMInternal w8
+  Relative w8 -> assembleROMInternal w8
+  ZeroPage w8 -> assembleROMInternal w8
+  ZeroPageX w8 -> assembleROMInternal w8
+  ZeroPageY w8 -> assembleROMInternal w8
   Absolute ll hh ->
     K.do
-      writeROMInternal ll
-      writeROMInternal hh
+      assembleROMInternal ll
+      assembleROMInternal hh
   AbsoluteX ll hh ->
     K.do
-      writeROMInternal ll
-      writeROMInternal hh
+      assembleROMInternal ll
+      assembleROMInternal hh
   AbsoluteY ll hh ->
     K.do
-      writeROMInternal ll
-      writeROMInternal hh
-  Indirect _ll _hh ->
+      assembleROMInternal ll
+      assembleROMInternal hh
+  Indirect ll hh ->
     -- Did you know? The only instruction the 6507 (nee 6502) that uses
     -- indirect addressing is JMP ($6C).
     -- I just thought that was interesting.
-    -- Perhaps this should throw an error instead, but lookupInstruction
-    -- already handles the bulk of that work.
-    K.ixpure ()
+    K.do
+      assembleROMInternal ll
+      assembleROMInternal hh
   Unrecognized err -> K.katteyomi (T.pack err) ""
 
 -- Once I figure out how to write sequence_ for indexed monads, I'll write this.
@@ -267,6 +271,49 @@ data Operand
   | AbsoluteY Word8 Word8
   | Indirect Word8 Word8
   | Unrecognized String -- What did you do?
+
+operandToWord16 :: Operand -> Korigatachi Word16
+operandToWord16 = \case
+  Accumulator -> K.do
+    K.logErr "operandToWord16 called on valueless operand"
+    K.ixpure 0xFFFF
+  Implied -> K.do
+    K.logErr "operandToWord16 called on valueless operand"
+    K.ixpure 0xFFFF
+  Immediate w8 -> K.ixpure $ fromIntegral w8
+  IndirectX w8 -> K.ixpure $ fromIntegral w8
+  IndirectY w8 -> K.ixpure $ fromIntegral w8
+  Relative w8 -> K.ixpure $ fromIntegral w8
+  ZeroPage w8 -> K.ixpure $ fromIntegral w8
+  ZeroPageX w8 -> K.ixpure $ fromIntegral w8
+  ZeroPageY w8 -> K.ixpure $ fromIntegral w8
+  Absolute ll hh ->
+    let
+      low = fromIntegral ll
+      high = fromIntegral hh
+    in
+      K.ixpure $ high * 256 + low
+  AbsoluteX ll hh ->
+    let
+      low = fromIntegral ll
+      high = fromIntegral hh
+    in
+      K.ixpure $ high * 256 + low
+  AbsoluteY ll hh ->
+    let
+      low = fromIntegral ll
+      high = fromIntegral hh
+    in
+      K.ixpure $ high * 256 + low
+  Indirect ll hh ->
+    let
+      low = fromIntegral ll
+      high = fromIntegral hh
+    in
+      K.ixpure $ high * 256 + low
+  Unrecognized err -> K.do
+    K.logErr err
+    K.ixpure 0xFFFF
 
 toAddressingMode :: Operand -> K.AddressingMode
 toAddressingMode = \case
@@ -370,7 +417,6 @@ stringToOperand operand =
       pure $ (shiftNibble 0 lowerHalf) .|. (shiftNibble 1 upperHalf)
 
     parseAccumulator = "A" *> (pure Accumulator) -- You almost never need to do this.
-
     parseImplied = "Implied" *> (pure Implied)
 
     parseImmediate = "#$" *> (Immediate <$> parseWord8)

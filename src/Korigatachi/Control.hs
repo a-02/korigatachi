@@ -1,6 +1,10 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Korigatachi.Control where
 
 -- base
+
+import Data.Text (pack)
 import Data.Word (Word16, Word8)
 import Numeric
 
@@ -20,3 +24,6 @@ when :: Switch -> Korigatachi () -> Korigatachi ()
 when s k = case s of
   On -> k
   Off -> ixpure ()
+
+logErr :: String -> Korigatachi ()
+logErr = flip katteyomi ("") . pack

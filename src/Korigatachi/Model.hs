@@ -71,9 +71,10 @@ data Atari = Atari
   , tia :: TIA
   -- ^ Television Interface Adapter.
   , pia :: PIA
-  -- ^ Off-the-shelf 6532 Peripheral Interface Adapter.
-  --   Technically, the RAM is controlled by this chip, but
-  --   it's easier to abstract the RAM to a seperate field.
+  {- ^ Off-the-shelf 6532 Peripheral Interface Adapter.
+  Technically, the RAM is controlled by this chip, but
+  it's easier to abstract the RAM to a seperate field.
+  -}
   }
   deriving (Generic.Generic)
 
@@ -98,8 +99,9 @@ the 6507 can only see 4K at a time. (or is it 8K?)
 data Memory4K = Memory4K
   { memory4k :: Sized.Vector 4096 Word8
   , focus :: Integer
-  -- ^ Should be a Word12, but no one cares about Word12s. Set this to -1 initially.
-  --   The focus should always be on the next word8 to be edited, not the word that was just edited.
+  {- ^ Should be a Word12, but no one cares about Word12s. Set this to -1 initially.
+  The focus should always be on the next word8 to be edited, not the word that was just edited.
+  -}
   }
 
 -- | You don't "burn" memory onto an Atari, especially not to an EPROM chip.
@@ -129,8 +131,9 @@ data TV = TV
   , line :: Int
   -- ^ vertical position, 0-261 for NTSC.
   , hPos :: Int
-  -- ^ horizontal position, 68 "pixels" of hblank, 160 pixels of color
-  --   one cpu cycle is 3 "pixels", so we get 76 cycles per line. This is 0-indexed.
+  {- ^ horizontal position, 68 "pixels" of hblank, 160 pixels of color
+  one cpu cycle is 3 "pixels", so we get 76 cycles per line. This is 0-indexed.
+  -}
   , region :: Region
   }
   deriving (Generic.Generic)
@@ -173,9 +176,10 @@ data PIA = PIA
   }
   deriving (Generic.Generic)
 
--- | I'm not gonna write out the addresses for all of these here.
--- Reference the pattern synonyms in Korigatachi.Assembly please.
--- Or find a copy of the Stella Programming Guide instead.
+{- | I'm not gonna write out the addresses for all of these here.
+Reference the pattern synonyms in Korigatachi.Assembly please.
+Or find a copy of the Stella Programming Guide instead.
+-}
 data TIA = TIA
   { vsync :: Word8
   -- ^ \$00 - ......1. - vertical sync set-clear

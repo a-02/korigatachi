@@ -75,6 +75,14 @@ writer (a, w) = RWIT $ \_ i -> pure (a, i, w)
 tell :: (Monoid w, Monad m) => w -> RWIT r w m i i ()
 tell w = writer ((), w)
 
+listen :: Monad m => RWIT r w m i j a -> RWIT r w m i j (a, w)
+listen = listens id
+
+listens :: Monad m => (w -> b) -> RWIT r w m i j a -> RWIT r w m i j (a, b)
+listens f m = RWIT $ \r i -> do
+  (a, j, w) <- runRWIT m r i
+  pure ((a, f w), j, w)
+
 {- | A monad transformer adding an environment of type @r@,
 collecting state between phantom types @i@ and @j@,
 and writing to an output of type @w@.
