@@ -269,7 +269,7 @@ data TIA = TIA
   -- ^ apply horizontal motion
   , hmclr :: Word8
   -- ^ clear horizontal motion registers
-  , csclr :: Word8
+  , cxclr :: Word8
   -- ^ clear collision latches
   }
   deriving (Generic.Generic)

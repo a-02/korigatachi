@@ -7,7 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QualifiedDo #-}
-{-# LANGUAGE TypeApplications #-}
+{- HLINT ignore "Use $>" -}
 
 module Korigatachi.Assembly where
 
@@ -164,25 +164,13 @@ assembleROMInternal w8 = K.do
     Left err -> K.katteyomi err ""
     Right rom4k ->
       K.put (atari & #rom .~ rom4k)
-
--- | TODO: Lensify this better.
+      
 setFlags :: Word8 -> Korigatachi ()
-setFlags flagsW8 = K.do
-  atari <- K.get
-  let
-    newFlags = flagsIso # (flagsW8 .|. (atari.cpu.statusRegister ^. flagsIso))
-  K.put atari {K.cpu = atari ^. #cpu & #statusRegister .~ newFlags}
+setFlags flagsW8 = K.modify $ #cpu % #statusRegister %~ (flagsIso %~ (flagsW8 .|.))
 
-{- | TODO: Lensify this better.
-???
-clearFlags flags = K.modify $ #cpu . #statusRegister . flagsIso %~ (.&. complement flags)
--}
+
 clearFlags :: Word8 -> Korigatachi ()
-clearFlags flagsW8 = K.do
-  atari <- K.get
-  let
-    newFlags = flagsIso # (complement flagsW8 .&. (atari.cpu.statusRegister ^. flagsIso))
-  K.put atari {K.cpu = atari ^. #cpu & #statusRegister .~ newFlags}
+clearFlags flagsW8 = K.modify $ #cpu % #statusRegister %~ (flagsIso %~ (complement flagsW8 .&.)) 
 
 -- Do the addressing mode calculations here, pass off to necessary writing functions.
 write :: Word8 -> Operand -> Korigatachi ()
@@ -200,10 +188,57 @@ write val opr = K.do
   go
 
 writeTIA :: Word8 -> Word16 -> Korigatachi ()
-writeTIA val oprW16 = undefined
+writeTIA val oprW16 = K.do
+  case oprW16 of
+    0x00 -> K.modify $ #tia % #vsync .~ val
+    0x01 -> K.modify $ #tia % #vblank .~ val
+    0x02 -> K.modify $ #tia % #wsync .~ val -- TODO: There's some special behavior that happens when this is strobed.
+    0x03 -> K.modify $ #tia % #rsync .~ val
+    0x04 -> K.modify $ #tia % #nusiz0 .~ val
+    0x05 -> K.modify $ #tia % #nusiz1 .~ val
+    0x06 -> K.modify $ #tia % #colup0 .~ val
+    0x07 -> K.modify $ #tia % #colup1 .~ val
+    0x08 -> K.modify $ #tia % #colupf .~ val
+    0x09 -> K.modify $ #tia % #colubk .~ val
+    0x0A -> K.modify $ #tia % #ctrlpf .~ val
+    0x0B -> K.modify $ #tia % #refp0 .~ val
+    0x0C -> K.modify $ #tia % #refp1 .~ val
+    0x0D -> K.modify $ #tia % #pf0 .~ val
+    0x0E -> K.modify $ #tia % #pf1 .~ val
+    0x0F -> K.modify $ #tia % #pf2 .~ val
+    0x10 -> K.modify $ #tia % #resp0 .~ val
+    0x11 -> K.modify $ #tia % #resp1 .~ val
+    0x12 -> K.modify $ #tia % #resm0 .~ val
+    0x13 -> K.modify $ #tia % #resm1 .~ val
+    0x14 -> K.modify $ #tia % #resbl .~ val
+    0x15 -> K.modify $ #tia % #audc0 .~ val
+    0x16 -> K.modify $ #tia % #audc1 .~ val
+    0x17 -> K.modify $ #tia % #audf0 .~ val
+    0x18 -> K.modify $ #tia % #audf1 .~ val
+    0x19 -> K.modify $ #tia % #audv0 .~ val
+    0x1A -> K.modify $ #tia % #audv1 .~ val
+    0x1B -> K.modify $ #tia % #grp0 .~ val
+    0x1C -> K.modify $ #tia % #grp1 .~ val
+    0x1D -> K.modify $ #tia % #enam0 .~ val
+    0x1E -> K.modify $ #tia % #enam1 .~ val
+    0x1F -> K.modify $ #tia % #enabl .~ val
+    0x20 -> K.modify $ #tia % #hmp0 .~ val
+    0x21 -> K.modify $ #tia % #hmp1 .~ val
+    0x22 -> K.modify $ #tia % #hmm0 .~ val
+    0x23 -> K.modify $ #tia % #hmm1 .~ val
+    0x24 -> K.modify $ #tia % #hmbl .~ val
+    0x25 -> K.modify $ #tia % #vdelp0 .~ val
+    0x26 -> K.modify $ #tia % #vdelp1 .~ val
+    0x27 -> K.modify $ #tia % #vdelbl .~ val
+    0x28 -> K.modify $ #tia % #resmp0 .~ val
+    0x29 -> K.modify $ #tia % #resmp1 .~ val
+    0x2A -> K.modify $ #tia % #hmove .~ val
+    0x2B -> K.modify $ #tia % #hmclr .~ val
+    0x2C -> K.modify $ #tia % #cxclr .~ val
+    _ -> K.katteyomi ("Attempted to write to invalid TIA register: " <> T.pack (oprW16 ^. K.hex16)) ""
 
 writePIA :: Word8 -> Word16 -> Korigatachi ()
-writePIA val oprW16 = K.do
+writePIA val oprW16 =
   case oprW16 of
     0x280 -> K.modify $ #pia % #swcha .~ val
     0x281 -> K.modify $ #pia % #swacnt .~ val
@@ -414,10 +449,10 @@ stringToOperand operand =
     parseWord8 = do
       lowerHalf <- hexDigit
       upperHalf <- hexDigit
-      pure $ (shiftNibble 0 lowerHalf) .|. (shiftNibble 1 upperHalf)
+      pure $ shiftNibble 0 lowerHalf .|. shiftNibble 1 upperHalf
 
-    parseAccumulator = "A" *> (pure Accumulator) -- You almost never need to do this.
-    parseImplied = "Implied" *> (pure Implied)
+    parseAccumulator = "A" *> pure Accumulator -- You almost never need to do this.
+    parseImplied = "Implied" *> pure Implied
 
     parseImmediate = "#$" *> (Immediate <$> parseWord8)
 
@@ -451,9 +486,9 @@ stringToOperand operand =
 
     parseAbsolute = do
       void $ char '$'
-      ll <- parseWord8
-      hh <- parseWord8
-      pure $ Absolute ll hh
+      Absolute <$>
+        parseWord8 <*>
+        parseWord8
 
     parseAbsoluteX = do
       void $ char '$'
