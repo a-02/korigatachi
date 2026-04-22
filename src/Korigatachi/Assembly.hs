@@ -7,23 +7,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QualifiedDo #-}
+
 {- HLINT ignore "Use $>" -}
 
 module Korigatachi.Assembly where
 
--- attoparsec
-import Data.Attoparsec.ByteString.Char8 as Attoparsec
-
 -- base
-import Control.Applicative
-import Control.Monad (void)
+import Data.Bits
 import Data.List
-import Data.Maybe (fromMaybe)
-import Data.String (IsString (..))
 import Data.Word (Word16, Word8)
-
--- bytestring
-import Data.ByteString.Char8 qualified as BSC8
 
 -- insert-ordered-containers
 import Data.HashMap.Strict.InsOrd qualified as InsOrd
@@ -35,13 +27,16 @@ import Optics
 import Data.Text qualified as T
 
 -- korigatachi
-
-import Data.Bits
-import Data.Char (ord)
+ 
+import Korigatachi.Assembly.Operand
+import Korigatachi.Assembly.Pattern
 import Korigatachi.Control qualified as K
 import Korigatachi.Model (Korigatachi, Shorthand (..))
 import Korigatachi.Model qualified as K
 import Korigatachi.Monad qualified as K
+import Data.Vector.Sized (index)
+import Data.Finite (finite)
+import Prelude hiding (read)
 
 sample :: Korigatachi ()
 sample = K.do
@@ -53,71 +48,61 @@ start = K.do
   sei
   cld
   ldx "#$FF"
+  txs
+  lda "#$00"
 
--- sei -- Set Interrupt Disable Flag.
--- cld
--- ldx "#$FF"
--- txs
--- lda "#$00"
+instruct :: Shorthand -> Operand -> Korigatachi () -> Korigatachi ()
+instruct sh opr emulate = 
+  case lookupInstruction sh opr of
+  Nothing ->
+    K.katteyomi ("Coudn't find instruction in lookup table: " <> T.pack (show sh) <> " " <> T.pack (show opr)) ""
+  Just instruction -> K.do
+    env <- K.ask
+    K.when env.assembler $ K.do
+      K.katteyomi "" (T.toLower . T.pack $ show sh <> " " <> opr ^. oprIso)
+      assembleROMInternal instruction.opcode
+    K.when env.emulator $ emulate
+    K.when env.display $ K.do
+      advanceTV instruction
 
+cld :: Korigatachi ()
+cld = instruct CLD Implied (clearFlags 0b000010000)
+
+lda :: Operand -> Korigatachi ()
+lda opr = instruct LDA opr $ K.do
+  val <- read opr
+  K.modify $ #cpu % #generalRegisters % #a .~ val
+  
 ldx :: Operand -> Korigatachi ()
-ldx opr = case lookupInstruction LDX opr of
+ldx opr = instruct LDX opr $ K.do
+  val <- read opr
+  K.modify $ #cpu % #generalRegisters % #x .~ val
+
+ldy :: Operand -> Korigatachi ()
+ldy opr = instruct LDY opr $ K.do
+  val <- read opr
+  K.modify $ #cpu % #generalRegisters % #y .~ val
+
+sei :: Korigatachi ()
+sei = instruct SEI Implied (setFlags 0b00000100)
+
+sta :: Operand -> Korigatachi ()
+sta opr = instruct STA opr $
+  K.do
+    atari <- K.get
+    write atari.cpu.generalRegisters.a opr
+
+txs :: Korigatachi ()
+txs = case lookupInstruction TXS Implied of
   Nothing ->
     K.katteyomi "LDX called with incompatible operand" ""
   Just instruction -> K.do
     env <- K.ask
     K.when env.assembler $ K.do
-      K.katteyomi "" (T.pack $ "ldx " <> opr ^. oprIso)
-      assembleROMInternal instruction.opcode
-      assembleROM opr
-    K.when env.emulator $ K.do
-      atari <- K.get
-      write atari.cpu.generalRegisters.a opr
-    K.when env.display $ K.do
-      advanceTV instruction
-
-cld :: Korigatachi ()
-cld = case lookupInstruction SEI Implied of
-  Nothing ->
-    K.katteyomi "Couldn't find SEI in lookup table?" ""
-  Just instruction -> K.do
-    env <- K.ask
-    K.when env.assembler $ K.do
-      K.katteyomi "" "cld"
+      K.katteyomi "" "txs"
       assembleROMInternal instruction.opcode
     K.when env.emulator $ K.do
-      clearFlags 8
-    K.when env.display $ K.do
-      advanceTV instruction
-
-sei :: Korigatachi ()
-sei = case lookupInstruction SEI Implied of
-  Nothing ->
-    K.katteyomi "Couldn't find SEI in lookup table?" ""
-  Just instruction -> K.do
-    env <- K.ask
-    K.when env.assembler $ K.do
-      K.katteyomi "" "sei"
-      assembleROMInternal instruction.opcode
-    K.when env.emulator $ K.do
-      setFlags 4
-    -- This is the same as setFlags 0b00000100
-    K.when env.display $ K.do
-      advanceTV instruction
-
-sta :: Operand -> Korigatachi ()
-sta opr = case lookupInstruction STA opr of
-  Nothing ->
-    K.katteyomi "STA called with incompatible operand" ""
-  Just instruction -> K.do
-    env <- K.ask
-    K.when env.assembler $ K.do
-      K.katteyomi "" (T.pack $ "sta " <> opr ^. oprIso)
-      assembleROMInternal instruction.opcode
-      assembleROM opr
-    K.when env.emulator $ K.do
-      atari <- K.get
-      write atari.cpu.generalRegisters.a opr
+      clearFlags 0
     K.when env.display $ K.do
       advanceTV instruction
 
@@ -164,15 +149,13 @@ assembleROMInternal w8 = K.do
     Left err -> K.katteyomi err ""
     Right rom4k ->
       K.put (atari & #rom .~ rom4k)
-      
+
 setFlags :: Word8 -> Korigatachi ()
 setFlags flagsW8 = K.modify $ #cpu % #statusRegister %~ (flagsIso %~ (flagsW8 .|.))
 
-
 clearFlags :: Word8 -> Korigatachi ()
-clearFlags flagsW8 = K.modify $ #cpu % #statusRegister %~ (flagsIso %~ (complement flagsW8 .&.)) 
+clearFlags flagsW8 = K.modify $ #cpu % #statusRegister %~ (flagsIso %~ (complement flagsW8 .&.))
 
--- Do the addressing mode calculations here, pass off to necessary writing functions.
 write :: Word8 -> Operand -> Korigatachi ()
 write val opr = K.do
   oprW16 <- operandToWord16 opr
@@ -187,54 +170,127 @@ write val opr = K.do
       | otherwise = K.ixpure ()
   go
 
+read :: Operand -> Korigatachi Word8
+read opr = K.do
+  oprW16 <- operandToWord16 opr
+  let
+    go
+      | oprW16 >= 0x00 && oprW16 <= 0x0D = readTIA oprW16 -- TIA registers
+      | oprW16 >= 0x80 && oprW16 <= 0xFF = readRAM oprW16 -- RAM
+      | oprW16 >= 0x280 && oprW16 <= 0x297 = readPIA oprW16 -- PIA registers
+      | oprW16 >= 0x1000 && oprW16 <= 0x1FFF = readROM oprW16 -- ROM reflections
+      | oprW16 >= 0x3000 && oprW16 <= 0x3FFF = readROM oprW16
+      | oprW16 >= 0x5000 && oprW16 <= 0x5FFF = readROM oprW16
+      | oprW16 >= 0x7000 && oprW16 <= 0x7FFF = readROM oprW16
+      | oprW16 >= 0x9000 && oprW16 <= 0x9FFF = readROM oprW16
+      | oprW16 >= 0xB000 && oprW16 <= 0xBFFF = readROM oprW16
+      | oprW16 >= 0xD000 && oprW16 <= 0xDFFF = readROM oprW16
+      | oprW16 >= 0xF000 && oprW16 <= 0xFFFF = readROM oprW16
+      | otherwise = K.do
+          K.katteyomi ("Attempted to read invalid address: " <> T.pack (oprW16 ^. K.hex16)) ""
+          K.ixpure 0
+  go
+
+readROM :: Word16 -> Korigatachi Word8
+readROM w16 = K.do
+  let
+    fin = finite (fromIntegral $ w16 .&. 0x0FFF) -- Can only see the 12 least significant bits.
+  K.query $ \a -> a.rom.memory4k `index` fin
+
+readPIA :: Word16 -> Korigatachi Word8
+readPIA oprW16 = 
+  case oprW16 of
+    0x280 -> K.query $ \a -> a.pia.swcha
+    0x281 -> K.query $ \a -> a.pia.swacnt
+    0x282 -> K.query $ \a -> a.pia.swchb
+    0x283 -> K.query $ \a -> a.pia.swbcnt
+    0x284 -> K.query $ \a -> a.pia.intim
+    0x294 -> K.query $ \a -> a.pia.tim1t
+    0x295 -> K.query $ \a -> a.pia.tim8t
+    0x296 -> K.query $ \a -> a.pia.tim64t
+    0x297 -> K.query $ \a -> a.pia.t1024t
+    _ -> K.do
+       K.katteyomi ("Attempted to read invalid PIA register: " <> T.pack (oprW16 ^. K.hex16)) ""
+       K.ixpure 0
+
+readRAM :: Word16 -> Korigatachi Word8
+readRAM w16 = K.do
+  let
+    fin = finite (fromIntegral w16 - 0x80) -- Putting it back in bounds of the sized vector.
+  K.query $ \a -> a.ram `index` fin
+
+readTIA :: Word16 -> Korigatachi Word8
+readTIA oprW16 = K.do
+  case oprW16 of
+    0x00 -> K.query $ \a -> a.tia.read.cxm0p 
+    0x01 -> K.query $ \a -> a.tia.read.cxm1p 
+    0x02 -> K.query $ \a -> a.tia.read.cxp0fb 
+    0x03 -> K.query $ \a -> a.tia.read.cxp1fb 
+    0x04 -> K.query $ \a -> a.tia.read.cxm0fb 
+    0x05 -> K.query $ \a -> a.tia.read.cxm1fb 
+    0x06 -> K.query $ \a -> a.tia.read.cxblpf 
+    0x07 -> K.query $ \a -> a.tia.read.cxppmm 
+    0x08 -> K.query $ \a -> a.tia.read.inpt0 
+    0x09 -> K.query $ \a -> a.tia.read.inpt1 
+    0x0A -> K.query $ \a -> a.tia.read.inpt2 
+    0x0B -> K.query $ \a -> a.tia.read.inpt3 
+    0x0C -> K.query $ \a -> a.tia.read.inpt4 
+    0x0D -> K.query $ \a -> a.tia.read.inpt5 
+    _ -> K.do
+      K.katteyomi ("Attempted to read invalid TIA register: " <> T.pack (oprW16 ^. K.hex16)) ""
+      K.ixpure 0
+
+-- It should be noted that while these TIA registers can be written to, it's not possible
+-- to read from them again. The data is essentially hoarded by the TIA. We keep the data around
+-- for debugging purposes. Also cause its hard to model it any other way.
 writeTIA :: Word8 -> Word16 -> Korigatachi ()
 writeTIA val oprW16 = K.do
   case oprW16 of
-    0x00 -> K.modify $ #tia % #vsync .~ val
-    0x01 -> K.modify $ #tia % #vblank .~ val
-    0x02 -> K.modify $ #tia % #wsync .~ val -- TODO: There's some special behavior that happens when this is strobed.
-    0x03 -> K.modify $ #tia % #rsync .~ val
-    0x04 -> K.modify $ #tia % #nusiz0 .~ val
-    0x05 -> K.modify $ #tia % #nusiz1 .~ val
-    0x06 -> K.modify $ #tia % #colup0 .~ val
-    0x07 -> K.modify $ #tia % #colup1 .~ val
-    0x08 -> K.modify $ #tia % #colupf .~ val
-    0x09 -> K.modify $ #tia % #colubk .~ val
-    0x0A -> K.modify $ #tia % #ctrlpf .~ val
-    0x0B -> K.modify $ #tia % #refp0 .~ val
-    0x0C -> K.modify $ #tia % #refp1 .~ val
-    0x0D -> K.modify $ #tia % #pf0 .~ val
-    0x0E -> K.modify $ #tia % #pf1 .~ val
-    0x0F -> K.modify $ #tia % #pf2 .~ val
-    0x10 -> K.modify $ #tia % #resp0 .~ val
-    0x11 -> K.modify $ #tia % #resp1 .~ val
-    0x12 -> K.modify $ #tia % #resm0 .~ val
-    0x13 -> K.modify $ #tia % #resm1 .~ val
-    0x14 -> K.modify $ #tia % #resbl .~ val
-    0x15 -> K.modify $ #tia % #audc0 .~ val
-    0x16 -> K.modify $ #tia % #audc1 .~ val
-    0x17 -> K.modify $ #tia % #audf0 .~ val
-    0x18 -> K.modify $ #tia % #audf1 .~ val
-    0x19 -> K.modify $ #tia % #audv0 .~ val
-    0x1A -> K.modify $ #tia % #audv1 .~ val
-    0x1B -> K.modify $ #tia % #grp0 .~ val
-    0x1C -> K.modify $ #tia % #grp1 .~ val
-    0x1D -> K.modify $ #tia % #enam0 .~ val
-    0x1E -> K.modify $ #tia % #enam1 .~ val
-    0x1F -> K.modify $ #tia % #enabl .~ val
-    0x20 -> K.modify $ #tia % #hmp0 .~ val
-    0x21 -> K.modify $ #tia % #hmp1 .~ val
-    0x22 -> K.modify $ #tia % #hmm0 .~ val
-    0x23 -> K.modify $ #tia % #hmm1 .~ val
-    0x24 -> K.modify $ #tia % #hmbl .~ val
-    0x25 -> K.modify $ #tia % #vdelp0 .~ val
-    0x26 -> K.modify $ #tia % #vdelp1 .~ val
-    0x27 -> K.modify $ #tia % #vdelbl .~ val
-    0x28 -> K.modify $ #tia % #resmp0 .~ val
-    0x29 -> K.modify $ #tia % #resmp1 .~ val
-    0x2A -> K.modify $ #tia % #hmove .~ val
-    0x2B -> K.modify $ #tia % #hmclr .~ val
-    0x2C -> K.modify $ #tia % #cxclr .~ val
+    0x00 -> K.modify $ #tia % #write % #vsync .~ val
+    0x01 -> K.modify $ #tia % #write % #vblank .~ val
+    0x02 -> K.modify $ #tia % #write % #wsync .~ val -- TODO: There's some special behavior that happens when this is strobed.
+    0x03 -> K.modify $ #tia % #write % #rsync .~ val
+    0x04 -> K.modify $ #tia % #write % #nusiz0 .~ val
+    0x05 -> K.modify $ #tia % #write % #nusiz1 .~ val
+    0x06 -> K.modify $ #tia % #write % #colup0 .~ val
+    0x07 -> K.modify $ #tia % #write % #colup1 .~ val
+    0x08 -> K.modify $ #tia % #write % #colupf .~ val
+    0x09 -> K.modify $ #tia % #write % #colubk .~ val
+    0x0A -> K.modify $ #tia % #write % #ctrlpf .~ val
+    0x0B -> K.modify $ #tia % #write % #refp0 .~ val
+    0x0C -> K.modify $ #tia % #write % #refp1 .~ val
+    0x0D -> K.modify $ #tia % #write % #pf0 .~ val
+    0x0E -> K.modify $ #tia % #write % #pf1 .~ val
+    0x0F -> K.modify $ #tia % #write % #pf2 .~ val
+    0x10 -> K.modify $ #tia % #write % #resp0 .~ val
+    0x11 -> K.modify $ #tia % #write % #resp1 .~ val
+    0x12 -> K.modify $ #tia % #write % #resm0 .~ val
+    0x13 -> K.modify $ #tia % #write % #resm1 .~ val
+    0x14 -> K.modify $ #tia % #write % #resbl .~ val
+    0x15 -> K.modify $ #tia % #write % #audc0 .~ val
+    0x16 -> K.modify $ #tia % #write % #audc1 .~ val
+    0x17 -> K.modify $ #tia % #write % #audf0 .~ val
+    0x18 -> K.modify $ #tia % #write % #audf1 .~ val
+    0x19 -> K.modify $ #tia % #write % #audv0 .~ val
+    0x1A -> K.modify $ #tia % #write % #audv1 .~ val
+    0x1B -> K.modify $ #tia % #write % #grp0 .~ val
+    0x1C -> K.modify $ #tia % #write % #grp1 .~ val
+    0x1D -> K.modify $ #tia % #write % #enam0 .~ val
+    0x1E -> K.modify $ #tia % #write % #enam1 .~ val
+    0x1F -> K.modify $ #tia % #write % #enabl .~ val
+    0x20 -> K.modify $ #tia % #write % #hmp0 .~ val
+    0x21 -> K.modify $ #tia % #write % #hmp1 .~ val
+    0x22 -> K.modify $ #tia % #write % #hmm0 .~ val
+    0x23 -> K.modify $ #tia % #write % #hmm1 .~ val
+    0x24 -> K.modify $ #tia % #write % #hmbl .~ val
+    0x25 -> K.modify $ #tia % #write % #vdelp0 .~ val
+    0x26 -> K.modify $ #tia % #write % #vdelp1 .~ val
+    0x27 -> K.modify $ #tia % #write % #vdelbl .~ val
+    0x28 -> K.modify $ #tia % #write % #resmp0 .~ val
+    0x29 -> K.modify $ #tia % #write % #resmp1 .~ val
+    0x2A -> K.modify $ #tia % #write % #hmove .~ val
+    0x2B -> K.modify $ #tia % #write % #hmclr .~ val
+    0x2C -> K.modify $ #tia % #write % #cxclr .~ val -- TODO: Strobing this clears the collision latches.
     _ -> K.katteyomi ("Attempted to write to invalid TIA register: " <> T.pack (oprW16 ^. K.hex16)) ""
 
 writePIA :: Word8 -> Word16 -> Korigatachi ()
@@ -290,331 +346,3 @@ assembleROM = \case
 -- Once I figure out how to write sequence_ for indexed monads, I'll write this.
 -- burns :: [Word8] -> Korigatachi ()
 -- burns w8s = sequence_ $ burn <$> w8s
-
-data Operand
-  = Accumulator -- Can technically be constructed.
-  | Implied -- Can't actually be constructed.
-  | Immediate Word8 -- #$LL
-  | IndirectX Word8 -- ($LL,x)
-  | IndirectY Word8 -- ($LL),y
-  | Relative Word8 -- r$LL
-  | ZeroPage Word8
-  | ZeroPageX Word8
-  | ZeroPageY Word8
-  | Absolute Word8 Word8
-  | AbsoluteX Word8 Word8
-  | AbsoluteY Word8 Word8
-  | Indirect Word8 Word8
-  | Unrecognized String -- What did you do?
-
-operandToWord16 :: Operand -> Korigatachi Word16
-operandToWord16 = \case
-  Accumulator -> K.do
-    K.logErr "operandToWord16 called on valueless operand"
-    K.ixpure 0xFFFF
-  Implied -> K.do
-    K.logErr "operandToWord16 called on valueless operand"
-    K.ixpure 0xFFFF
-  Immediate w8 -> K.ixpure $ fromIntegral w8
-  IndirectX w8 -> K.ixpure $ fromIntegral w8
-  IndirectY w8 -> K.ixpure $ fromIntegral w8
-  Relative w8 -> K.ixpure $ fromIntegral w8
-  ZeroPage w8 -> K.ixpure $ fromIntegral w8
-  ZeroPageX w8 -> K.ixpure $ fromIntegral w8
-  ZeroPageY w8 -> K.ixpure $ fromIntegral w8
-  Absolute ll hh ->
-    let
-      low = fromIntegral ll
-      high = fromIntegral hh
-    in
-      K.ixpure $ high * 256 + low
-  AbsoluteX ll hh ->
-    let
-      low = fromIntegral ll
-      high = fromIntegral hh
-    in
-      K.ixpure $ high * 256 + low
-  AbsoluteY ll hh ->
-    let
-      low = fromIntegral ll
-      high = fromIntegral hh
-    in
-      K.ixpure $ high * 256 + low
-  Indirect ll hh ->
-    let
-      low = fromIntegral ll
-      high = fromIntegral hh
-    in
-      K.ixpure $ high * 256 + low
-  Unrecognized err -> K.do
-    K.logErr err
-    K.ixpure 0xFFFF
-
-toAddressingMode :: Operand -> K.AddressingMode
-toAddressingMode = \case
-  Accumulator -> K.Accumulator
-  Implied -> K.Implied
-  Immediate _ -> K.Immediate
-  IndirectX _ -> K.IndirectX
-  IndirectY _ -> K.IndirectY
-  Relative _ -> K.Relative
-  ZeroPage _ -> K.ZeroPage
-  ZeroPageX _ -> K.ZeroPageX
-  ZeroPageY _ -> K.ZeroPageY
-  Absolute _ _ -> K.Absolute
-  AbsoluteX _ _ -> K.AbsoluteX
-  AbsoluteY _ _ -> K.AbsoluteY
-  Indirect _ _ -> K.Indirect
-  Unrecognized _ -> K.Implied
-
-oprIso :: Iso' Operand String
-oprIso = iso operandToString stringToOperand
-
-flagsIso :: Iso' K.Flags Word8
-flagsIso = iso K.flagsToWord8 K.word8ToFlags
-
-instance IsString Operand where
-  fromString = (oprIso #) -- I did this just to confuse myself.
-
-operandToString :: Operand -> String
-operandToString Accumulator = "A" -- For completeness.
-operandToString Implied = "Implied" -- For completeness.
-operandToString (Immediate opr) = "#$" <> (opr ^. K.hex8)
-operandToString (IndirectX opr) = "($" <> (opr ^. K.hex8) <> ",x)"
-operandToString (IndirectY opr) = "($" <> (opr ^. K.hex8) <> "),y"
-operandToString (Relative opr) = "r$" <> (opr ^. K.hex8)
-operandToString (ZeroPage opr) = "$" <> (opr ^. K.hex8)
-operandToString (ZeroPageX opr) = "$" <> (opr ^. K.hex8) <> ",x"
-operandToString (ZeroPageY opr) = "$" <> (opr ^. K.hex8) <> ",y"
-operandToString (Absolute ll hh) =
-  let
-    low :: Word16
-    low = fromIntegral ll
-    high :: Word16
-    high = fromIntegral hh
-  in
-    "$" <> ((high * 256 + low) ^. K.hex16) -- order of operations?
-operandToString (AbsoluteX ll hh) =
-  let
-    low :: Word16
-    low = fromIntegral ll
-    high :: Word16
-    high = fromIntegral hh
-  in
-    "$" <> ((high * 256 + low) ^. K.hex16) <> ",x" -- order of operations?
-operandToString (AbsoluteY ll hh) =
-  let
-    low :: Word16
-    low = fromIntegral ll
-    high :: Word16
-    high = fromIntegral hh
-  in
-    "$" <> ((high * 256 + low) ^. K.hex16) <> ",y" -- order of operations?
-operandToString (Indirect ll hh) =
-  let
-    low :: Word16
-    low = fromIntegral ll
-    high :: Word16
-    high = fromIntegral hh
-  in
-    "($" <> ((high * 256 + low) ^. K.hex16) <> ")" -- order of operations?
-operandToString (Unrecognized unrecognized) = unrecognized
-
-stringToOperand :: String -> Operand
-stringToOperand operand =
-  let
-    isHexDigit :: Char -> Bool
-    isHexDigit c =
-      let
-        w = ord c
-      in
-        (w >= 48 && w <= 57)
-          || (w >= 97 && w <= 102)
-          || (w >= 65 && w <= 70)
-
-    shiftNibble :: (Num a, Bits a) => Int -> Char -> a
-    shiftNibble nibbles c
-      | w >= 48 && w <= 57 = shiftL (fromIntegral (w - 48)) (nibbles * 4)
-      | w >= 97 = shiftL (fromIntegral (w - 87)) (nibbles * 4)
-      | otherwise = shiftL (fromIntegral (w - 55)) (nibbles * 4)
-     where
-      w = ord c
-
-    hexDigit :: Parser Char
-    hexDigit = satisfy isHexDigit <?> "hexDigit"
-
-    opr = BSC8.pack operand
-
-    parseWord8 :: Parser Word8
-    parseWord8 = do
-      lowerHalf <- hexDigit
-      upperHalf <- hexDigit
-      pure $ shiftNibble 0 lowerHalf .|. shiftNibble 1 upperHalf
-
-    parseAccumulator = "A" *> pure Accumulator -- You almost never need to do this.
-    parseImplied = "Implied" *> pure Implied
-
-    parseImmediate = "#$" *> (Immediate <$> parseWord8)
-
-    parseIndirectX = do
-      void $ string "($"
-      w8 <- parseWord8
-      void $ string ",x)"
-      pure $ IndirectX w8
-
-    parseIndirectY = do
-      void $ string "($"
-      w8 <- parseWord8
-      void $ string "),y"
-      pure $ IndirectX w8
-
-    parseRelative = "r$" *> (Relative <$> parseWord8)
-
-    parseZeroPage = char '$' *> (ZeroPage <$> parseWord8)
-
-    parseZeroPageX = do
-      void $ char '$'
-      w8 <- parseWord8
-      void $ string ",x"
-      pure $ ZeroPageX w8
-
-    parseZeroPageY = do
-      void $ char '$'
-      w8 <- parseWord8
-      void $ string ",y"
-      pure $ ZeroPageY w8
-
-    parseAbsolute = do
-      void $ char '$'
-      Absolute <$>
-        parseWord8 <*>
-        parseWord8
-
-    parseAbsoluteX = do
-      void $ char '$'
-      ll <- parseWord8
-      hh <- parseWord8
-      void $ string ",x"
-      pure $ AbsoluteX ll hh
-
-    parseAbsoluteY = do
-      void $ char '$'
-      ll <- parseWord8
-      hh <- parseWord8
-      void $ string ",y"
-      pure $ AbsoluteY ll hh
-
-    parseIndirect = do
-      void $ string "($"
-      ll <- parseWord8
-      hh <- parseWord8
-      void $ char ')'
-      pure $ Indirect ll hh
-
-    parseOperand =
-      parseImmediate
-        <|> parseAccumulator
-        <|> parseImplied
-        <|> parseIndirectX
-        <|> parseIndirectY
-        <|> parseRelative
-        <|> parseZeroPage
-        <|> parseZeroPageX
-        <|> parseZeroPageY
-        <|> parseAbsolute
-        <|> parseAbsoluteX
-        <|> parseAbsoluteY
-        <|> parseIndirect
-  in
-    fromMaybe (Unrecognized operand) $ maybeResult (parse parseOperand opr)
-
-pattern VSYNC :: Operand
-pattern VSYNC = ZeroPage 0x00 -- Vertical Sync Set-Clear
-pattern VBLANK :: Operand
-pattern VBLANK = ZeroPage 0x01 -- Vertical Blank Set-Clear
-pattern WSYNC :: Operand
-pattern WSYNC = ZeroPage 0x02 -- Wait for Horizontal Blank
-pattern RSYNC :: Operand
-pattern RSYNC = ZeroPage 0x03 -- Reset Horizontal Sync Counter
-pattern NUSIZ0 :: Operand
-pattern NUSIZ0 = ZeroPage 0x04 -- Number-Size player/missle 0
-pattern NUSIZ1 :: Operand
-pattern NUSIZ1 = ZeroPage 0x05 -- Number-Size player/missle 1
-pattern COLUP0 :: Operand
-pattern COLUP0 = ZeroPage 0x06 -- Color-Luminance Player 0
-pattern COLUP1 :: Operand
-pattern COLUP1 = ZeroPage 0x07 -- Color-Luminance Player 1
-pattern COLUPF :: Operand
-pattern COLUPF = ZeroPage 0x08 -- Color-Luminance Playfield
-pattern COLUBK :: Operand
-pattern COLUBK = ZeroPage 0x09 -- Color-Luminance Background
-pattern CTRLPF :: Operand
-pattern CTRLPF = ZeroPage 0x0A -- Control Playfield, Ball, Collisions
-pattern REFP0 :: Operand
-pattern REFP0 = ZeroPage 0x0B -- Reflection Player 0
-pattern REFP1 :: Operand
-pattern REFP1 = ZeroPage 0x0C -- Reflection Player 1
-pattern PF0 :: Operand
-pattern PF0 = ZeroPage 0x0D -- Playfield Register Byte 0
-pattern PF1 :: Operand
-pattern PF1 = ZeroPage 0x0E -- Playfield Register Byte 1
-pattern PF2 :: Operand
-pattern PF2 = ZeroPage 0x0F -- Playfield Register Byte 2
-pattern RESP0 :: Operand
-pattern RESP0 = ZeroPage 0x10 -- Reset Player 0
-pattern RESP1 :: Operand
-pattern RESP1 = ZeroPage 0x11 -- Reset Player 1
-pattern RESM0 :: Operand
-pattern RESM0 = ZeroPage 0x12 -- Reset Missle 0
-pattern RESM1 :: Operand
-pattern RESM1 = ZeroPage 0x13 -- Reset Missle 1
-pattern RESBL :: Operand
-pattern RESBL = ZeroPage 0x14 -- Reset Ball
-pattern AUDC0 :: Operand
-pattern AUDC0 = ZeroPage 0x15 -- Audio Control 0
-pattern AUDC1 :: Operand
-pattern AUDC1 = ZeroPage 0x16 -- Audio Control 1
-pattern AUDF0 :: Operand
-pattern AUDF0 = ZeroPage 0x17 -- Audio Frequency 0
-pattern AUDF1 :: Operand
-pattern AUDF1 = ZeroPage 0x18 -- Audio Frequency 1
-pattern AUDV0 :: Operand
-pattern AUDV0 = ZeroPage 0x19 -- Audio Volume 0
-pattern AUDV1 :: Operand
-pattern AUDV1 = ZeroPage 0x1A -- Audio Volume 1
-pattern GRP0 :: Operand
-pattern GRP0 = ZeroPage 0x1B -- Graphics Register Player 0
-pattern GRP1 :: Operand
-pattern GRP1 = ZeroPage 0x1C -- Graphics Register Player 1
-pattern ENAM0 :: Operand
-pattern ENAM0 = ZeroPage 0x1D -- Graphics Enable Missle 0
-pattern ENAM1 :: Operand
-pattern ENAM1 = ZeroPage 0x1E -- Graphics Enable Missle 1
-pattern ENABL :: Operand
-pattern ENABL = ZeroPage 0x1F -- Graphics Enable Ball
-pattern HMP0 :: Operand
-pattern HMP0 = ZeroPage 0x20 -- Horizontal Motion Player 0
-pattern HMP1 :: Operand
-pattern HMP1 = ZeroPage 0x21 -- Horizontal Motion Player 1
-pattern HMM0 :: Operand
-pattern HMM0 = ZeroPage 0x22 -- Horizontal Motion Missle 0
-pattern HMM1 :: Operand
-pattern HMM1 = ZeroPage 0x23 -- Horizontal Motion Missle 1
-pattern HMBL :: Operand
-pattern HMBL = ZeroPage 0x24 -- Horizontal Motion Ball
-pattern VDELP0 :: Operand
-pattern VDELP0 = ZeroPage 0x25 -- Vertical Delay Player 0
-pattern VDELP1 :: Operand
-pattern VDELP1 = ZeroPage 0x26 -- Vertical Delay Player 1
-pattern VDELBL :: Operand
-pattern VDELBL = ZeroPage 0x27 -- Vertical Delay Ball
-pattern RESMP0 :: Operand
-pattern RESMP0 = ZeroPage 0x28 -- Reset Missle 0 to Player 0
-pattern RESMP1 :: Operand
-pattern RESMP1 = ZeroPage 0x29 -- Reset Missle 1 to Player 1
-pattern HMOVE :: Operand
-pattern HMOVE = ZeroPage 0x2A -- Apply Horizontal Motion
-pattern HMCLR :: Operand
-pattern HMCLR = ZeroPage 0x2B -- Clear Horizontal Move Registers
-pattern CXCLR :: Operand
-pattern CXCLR = ZeroPage 0x2C -- Clear Collision Latches

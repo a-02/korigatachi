@@ -181,6 +181,31 @@ Reference the pattern synonyms in Korigatachi.Assembly please.
 Or find a copy of the Stella Programming Guide instead.
 -}
 data TIA = TIA
+  { write :: WriteTIA
+  , read :: ReadTIA
+  }
+  deriving (Generic.Generic)
+
+-- No helpful comments for you right now.
+data ReadTIA = ReadTIA
+  { cxm0p :: Word8
+  , cxm1p :: Word8
+  , cxp0fb :: Word8
+  , cxp1fb :: Word8
+  , cxm0fb :: Word8
+  , cxm1fb :: Word8
+  , cxblpf :: Word8
+  , cxppmm :: Word8
+  , inpt0 :: Word8
+  , inpt1 :: Word8
+  , inpt2 :: Word8
+  , inpt3 :: Word8
+  , inpt4 :: Word8
+  , inpt5 :: Word8
+  }
+  deriving (Generic.Generic)
+
+data WriteTIA = WriteTIA
   { vsync :: Word8
   -- ^ \$00 - ......1. - vertical sync set-clear
   , vblank :: Word8
@@ -396,7 +421,7 @@ data Shorthand
   | BVC
   | BVS
   | CLC
-  | CLD
+  | CLD -- Done.
   | CLI
   | CLV
   | CMP
@@ -416,9 +441,9 @@ data Shorthand
   | JSR
   | LAS
   | LAX
-  | LDA
-  | LDX
-  | LDY
+  | LDA -- Done.
+  | LDX -- Done.
+  | LDY -- Done.
   | LSR
   | LXA
   | NOP
@@ -438,12 +463,12 @@ data Shorthand
   | SBX
   | SEC
   | SED
-  | SEI
+  | SEI -- Done.
   | SHA
   | SHY
   | SLO
   | SRE
-  | STA
+  | STA -- Done.
   | STX
   | STY
   | TAS
@@ -451,7 +476,7 @@ data Shorthand
   | TAY
   | TSX
   | TXA
-  | TXS
+  | TXS -- Done?
   | TYA
   | UBC
   deriving (Eq, Ord, Show)

@@ -62,6 +62,8 @@ library
     exposed-modules:
         Korigatachi
         Korigatachi.Assembly
+        Korigatachi.Assembly.Pattern
+        Korigatachi.Assembly.Operand
         Korigatachi.Comonad
         Korigatachi.Control
         Korigatachi.Model
