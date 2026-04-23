@@ -93,6 +93,18 @@ sta opr = instruct STA opr $
     atari <- K.get
     write atari.cpu.generalRegisters.a opr
 
+stx :: Operand -> Korigatachi ()
+stx opr = instruct STX opr $
+  K.do
+    atari <- K.get
+    write atari.cpu.generalRegisters.x opr
+
+sty :: Operand -> Korigatachi ()
+sty opr = instruct STX opr $
+  K.do
+    atari <- K.get
+    write atari.cpu.generalRegisters.y opr
+
 txs :: Korigatachi ()
 txs = instruct TXS Implied $ K.do
     K.modify $ \atari -> atari & #cpu % #stackPointer .~ (atari ^. #cpu % #generalRegisters % #x)
