@@ -64,7 +64,6 @@ library
         Korigatachi.Assembly
         Korigatachi.Assembly.Pattern
         Korigatachi.Assembly.Operand
-        Korigatachi.Comonad
         Korigatachi.Control
         Korigatachi.Model
         Korigatachi.Monad
@@ -79,6 +78,7 @@ library
     build-depends:
         attoparsec,
         base,
+        brillo,
         bytestring,
         finite-typelits,
         insert-ordered-containers,
@@ -88,8 +88,7 @@ library
         template-haskell,
         th-lift,
         transformers,
-        vector-sized,
-        brillo
+        vector-sized
 
     -- Directories containing source files.
     hs-source-dirs:   src

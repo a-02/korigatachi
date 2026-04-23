@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QualifiedDo #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 {- HLINT ignore "Use $>" -}
 
@@ -59,7 +60,7 @@ instruct sh opr emulate =
   Just instruction -> K.do
     env <- K.ask
     K.when env.assembler $ K.do
-      K.katteyomi "" (T.toLower . T.pack $ show sh <> " " <> opr ^. oprIso)
+      K.katteyomi "" (T.toLower . T.pack $ show sh <> " " <> opr ^. oprIso <> "\n")
       assembleROMInternal instruction.opcode
     K.when env.emulator $ emulate
     K.when env.display $ K.do
@@ -93,18 +94,8 @@ sta opr = instruct STA opr $
     write atari.cpu.generalRegisters.a opr
 
 txs :: Korigatachi ()
-txs = case lookupInstruction TXS Implied of
-  Nothing ->
-    K.katteyomi "LDX called with incompatible operand" ""
-  Just instruction -> K.do
-    env <- K.ask
-    K.when env.assembler $ K.do
-      K.katteyomi "" "txs"
-      assembleROMInternal instruction.opcode
-    K.when env.emulator $ K.do
-      clearFlags 0
-    K.when env.display $ K.do
-      advanceTV instruction
+txs = instruct TXS Implied $ K.do
+    K.modify $ \atari -> atari & #cpu % #stackPointer .~ (atari ^. #cpu % #generalRegisters % #x)
 
 advanceTV :: K.Instruction -> Korigatachi ()
 advanceTV ins =
