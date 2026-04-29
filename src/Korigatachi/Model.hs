@@ -78,12 +78,31 @@ data Atari = Atari
   }
   deriving (Generic.Generic)
 
+emptyAtari :: Atari
+emptyAtari =
+  Atari
+    emptyMemory
+    emptyCPU
+    emptyROM
+    emptyTV
+    emptyTIA
+    emptyPIA
+
+
+
+
+
+
+
 {- | The Atari 2600 only had 128 bytes of RAM.
 Frankly, I'm stunned it even has that much.
 We can't even use some of these, maybe some type level
 synonym is in order that has a list of fields we can't use.
 -}
 type Memory = Sized.Vector 128 Word8
+
+emptyMemory :: Memory
+emptyMemory = Sized.replicate 0
 
 updateMemory :: Memory -> Word8 -> Word8 -> Either T.Text Memory
 updateMemory memory w8 address =
@@ -103,6 +122,12 @@ data Memory4K = Memory4K
   The focus should always be on the next word8 to be edited, not the word that was just edited.
   -}
   }
+
+emptyROM :: Memory4K
+emptyROM =
+  Memory4K
+    (Sized.replicate 0)
+    (-1)
 
 -- | You don't "burn" memory onto an Atari, especially not to an EPROM chip.
 updateRom :: Memory4K -> Word8 -> Either T.Text Memory4K
@@ -137,6 +162,16 @@ data TV = TV
   , region :: Region
   }
   deriving (Generic.Generic)
+  
+emptyTV :: TV
+emptyTV =
+  TV
+    0
+    VSync
+    0
+    0
+    NTSC
+    
 
 advanceTV :: Int -> TV -> TV
 advanceTV cyclesToAdvance television =
@@ -175,6 +210,9 @@ data PIA = PIA
   -- ^ \$297, set 1024 clock interval (858.2 usec/interval)
   }
   deriving (Generic.Generic)
+  
+emptyPIA :: PIA
+emptyPIA = PIA 0 0 0 0 0 0 0 0 0
 
 {- | I'm not gonna write out the addresses for all of these here.
 Reference the pattern synonyms in Korigatachi.Assembly please.
@@ -185,6 +223,10 @@ data TIA = TIA
   , read :: ReadTIA
   }
   deriving (Generic.Generic)
+
+
+emptyTIA :: TIA
+emptyTIA = TIA emptyWriteTIA emptyReadTIA
 
 -- No helpful comments for you right now.
 data ReadTIA = ReadTIA
@@ -204,6 +246,9 @@ data ReadTIA = ReadTIA
   , inpt5 :: Word8
   }
   deriving (Generic.Generic)
+
+emptyReadTIA :: ReadTIA
+emptyReadTIA = ReadTIA 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -- lol
 
 data WriteTIA = WriteTIA
   { vsync :: Word8
@@ -299,6 +344,9 @@ data WriteTIA = WriteTIA
   }
   deriving (Generic.Generic)
 
+emptyWriteTIA :: WriteTIA
+emptyWriteTIA = WriteTIA 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -- LOL 
+
 data Region = NTSC | PAL | SECAM -- we're only supporting NTSC for rn.
 
 -- | Abstract representation of where on the TV screen the beam is.
@@ -313,12 +361,25 @@ data MOS6507 = MOS6507
   }
   deriving (Generic.Generic)
 
+emptyCPU :: MOS6507
+emptyCPU =
+  MOS6507
+    emptyRegisters
+    0
+    0
+    (word8ToFlags 0)
+    0
+
+
 data Registers = Registers
   { a :: Word8
   , x :: Word8
   , y :: Word8
   }
   deriving (Generic.Generic)
+
+emptyRegisters :: Registers
+emptyRegisters = Registers 0 0 0
 
 data Env = Env
   { assembler :: Switch
