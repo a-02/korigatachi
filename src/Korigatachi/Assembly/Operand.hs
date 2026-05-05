@@ -24,6 +24,8 @@ import Data.ByteString.Char8 qualified as BSC8
 import Optics
 
 -- korigatachi
+
+import Data.Text qualified as T
 import Korigatachi.Control qualified as K
 import Korigatachi.Model (Korigatachi)
 import Korigatachi.Model qualified as K
@@ -43,7 +45,7 @@ data Operand
   | AbsoluteX Word8 Word8
   | AbsoluteY Word8 Word8
   | Indirect Word8 Word8
-  | Unrecognized String -- What did you do?
+  | Label String -- What did you do?
   deriving (Show)
 
 -- TODO: Make this actually find the correct address based on operand.
@@ -86,9 +88,13 @@ operandToWord16 = \case
       high = fromIntegral hh
     in
       K.ixpure $ high * 256 + low
-  Unrecognized err -> K.do
-    K.logErr err
-    K.ixpure 0xFFFF
+  Label label -> K.do
+    romLabels <- K.query $ \a -> K.labels $ K.rom a
+    case filter (\(K.Label tx _) -> tx == (T.pack label)) romLabels of
+      [] -> K.do
+        K.katteyomi ("unable to resolve label: " <> T.pack label) ""
+        K.ixpure 0xFFFF
+      ((K.Label _ labelLocation) : _) -> K.ixpure labelLocation
 
 toAddressingMode :: Operand -> K.AddressingMode
 toAddressingMode = \case
@@ -105,7 +111,7 @@ toAddressingMode = \case
   AbsoluteX _ _ -> K.AbsoluteX
   AbsoluteY _ _ -> K.AbsoluteY
   Indirect _ _ -> K.Indirect
-  Unrecognized _ -> K.Implied
+  Label _ -> K.Implied
 
 -- | This isn't a valid Iso. Don't use this unless you are me.
 oprIso :: Iso' Operand String
@@ -159,7 +165,7 @@ operandToString (Indirect ll hh) =
     high = fromIntegral hh
   in
     "($" <> ((high * 256 + low) ^. K.hex16) <> ")" -- order of operations?
-operandToString (Unrecognized unrecognized) = unrecognized
+operandToString (Label lb) = lb
 
 stringToOperand :: String -> Operand
 stringToOperand operand =
@@ -193,7 +199,7 @@ stringToOperand operand =
       pure $ shiftNibble 0 lowerHalf .|. shiftNibble 1 upperHalf
 
     parseAccumulator = "A" *> pure Accumulator -- You almost never need to do this.
-    parseImplied = "Implied" *> pure Implied
+    parseImplied = "" *> pure Implied
 
     parseImmediate = "#$" *> (Immediate <$> parseWord8)
 
@@ -267,4 +273,4 @@ stringToOperand operand =
         <|> parseAbsoluteY
         <|> parseIndirect
   in
-    fromMaybe (Unrecognized operand) $ maybeResult (parse parseOperand opr)
+    fromMaybe (Label operand) $ maybeResult (parse parseOperand opr)

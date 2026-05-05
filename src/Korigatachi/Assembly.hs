@@ -1,5 +1,6 @@
 {-# LANGUAGE BinaryLiterals #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedLabels #-}
@@ -7,7 +8,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QualifiedDo #-}
-{-# LANGUAGE FlexibleContexts #-}
 
 {- HLINT ignore "Use $>" -}
 
@@ -28,43 +28,46 @@ import Optics
 import Data.Text qualified as T
 
 -- korigatachi
- 
+
+import Data.Finite (finite)
+import Data.Vector.Sized (index)
 import Korigatachi.Assembly.Operand
-import Korigatachi.Assembly.Pattern
 import Korigatachi.Control qualified as K
 import Korigatachi.Model (Korigatachi, Shorthand (..))
 import Korigatachi.Model qualified as K
 import Korigatachi.Monad qualified as K
-import Data.Vector.Sized (index)
-import Data.Finite (finite)
 import Prelude hiding (read)
 
-sample :: Korigatachi ()
-sample = K.do
-  sta WSYNC
-
--- | The standard Atari 2600 start script.
-start :: Korigatachi ()
-start = K.do
-  sei
-  cld
-  ldx "#$FF"
-  txs
-  lda "#$00"
+label :: T.Text -> Korigatachi ()
+label labelText = K.do
+  labelByte <- K.query $ \a -> a.rom.focus
+  K.modify $ #rom % #labels %~ (\ls -> K.Label labelText labelByte : ls)
 
 instruct :: Shorthand -> Operand -> Korigatachi () -> Korigatachi ()
-instruct sh opr emulate = 
+instruct sh opr emulate =
   case lookupInstruction sh opr of
-  Nothing ->
-    K.katteyomi ("Coudn't find instruction in lookup table: " <> T.pack (show sh) <> " " <> T.pack (show opr)) ""
-  Just instruction -> K.do
-    env <- K.ask
-    K.when env.assembler $ K.do
-      K.katteyomi "" (T.toLower . T.pack $ show sh <> " " <> opr ^. oprIso <> "\n")
-      assembleROMInternal instruction.opcode
-    K.when env.emulator $ emulate
-    K.when env.display $ K.do
-      advanceTV instruction
+    Nothing ->
+      K.katteyomi ("Coudn't find instruction in lookup table: " <> T.pack (show sh) <> " " <> T.pack (show opr)) ""
+    Just instruction -> K.do
+      env <- K.ask
+      K.when env.assembler $ K.do
+        K.katteyomi "" (T.toLower . T.pack $ show sh <> " " <> opr ^. oprIso <> "\n")
+        assembleROMInternal instruction.opcode
+      K.when env.emulator $ emulate
+      K.when env.display $ K.do
+        advanceTV instruction
+
+dex :: Korigatachi ()
+dex = instruct DEX Implied (K.ixpure ()) -- TODO: Decrement X by one.
+
+dey :: Korigatachi ()
+dey = instruct DEX Implied (K.ixpure ()) -- TODO: Decrement Y by one.
+
+bne :: Operand -> Korigatachi ()
+bne opr = instruct BNE opr (K.ixpure ()) -- TODO: Break if non zero.
+
+jmp :: Operand -> Korigatachi ()
+jmp opr = instruct JMP opr (K.ixpure ()) -- TODO: Break if non zero.
 
 cld :: Korigatachi ()
 cld = instruct CLD Implied (clearFlags 0b000010000)
@@ -73,7 +76,7 @@ lda :: Operand -> Korigatachi ()
 lda opr = instruct LDA opr $ K.do
   val <- read opr
   K.modify $ #cpu % #generalRegisters % #a .~ val
-  
+
 ldx :: Operand -> Korigatachi ()
 ldx opr = instruct LDX opr $ K.do
   val <- read opr
@@ -106,8 +109,9 @@ sty opr = instruct STX opr $
     write atari.cpu.generalRegisters.y opr
 
 txs :: Korigatachi ()
-txs = instruct TXS Implied $ K.do
-    K.modify $ \atari -> atari & #cpu % #stackPointer .~ (atari ^. #cpu % #generalRegisters % #x)
+txs = instruct TXS Implied $
+  K.modify $
+    \atari -> atari & #cpu % #stackPointer .~ (atari ^. #cpu % #generalRegisters % #x)
 
 advanceTV :: K.Instruction -> Korigatachi ()
 advanceTV ins =
@@ -201,7 +205,7 @@ readROM w16 = K.do
   K.query $ \a -> a.rom.memory4k `index` fin
 
 readPIA :: Word16 -> Korigatachi Word8
-readPIA oprW16 = 
+readPIA oprW16 =
   case oprW16 of
     0x280 -> K.query $ \a -> a.pia.swcha
     0x281 -> K.query $ \a -> a.pia.swacnt
@@ -213,8 +217,8 @@ readPIA oprW16 =
     0x296 -> K.query $ \a -> a.pia.tim64t
     0x297 -> K.query $ \a -> a.pia.t1024t
     _ -> K.do
-       K.katteyomi ("Attempted to read invalid PIA register: " <> T.pack (oprW16 ^. K.hex16)) ""
-       K.ixpure 0
+      K.katteyomi ("Attempted to read invalid PIA register: " <> T.pack (oprW16 ^. K.hex16)) ""
+      K.ixpure 0
 
 readRAM :: Word16 -> Korigatachi Word8
 readRAM w16 = K.do
@@ -225,20 +229,20 @@ readRAM w16 = K.do
 readTIA :: Word16 -> Korigatachi Word8
 readTIA oprW16 = K.do
   case oprW16 of
-    0x00 -> K.query $ \a -> a.tia.read.cxm0p 
-    0x01 -> K.query $ \a -> a.tia.read.cxm1p 
-    0x02 -> K.query $ \a -> a.tia.read.cxp0fb 
-    0x03 -> K.query $ \a -> a.tia.read.cxp1fb 
-    0x04 -> K.query $ \a -> a.tia.read.cxm0fb 
-    0x05 -> K.query $ \a -> a.tia.read.cxm1fb 
-    0x06 -> K.query $ \a -> a.tia.read.cxblpf 
-    0x07 -> K.query $ \a -> a.tia.read.cxppmm 
-    0x08 -> K.query $ \a -> a.tia.read.inpt0 
-    0x09 -> K.query $ \a -> a.tia.read.inpt1 
-    0x0A -> K.query $ \a -> a.tia.read.inpt2 
-    0x0B -> K.query $ \a -> a.tia.read.inpt3 
-    0x0C -> K.query $ \a -> a.tia.read.inpt4 
-    0x0D -> K.query $ \a -> a.tia.read.inpt5 
+    0x00 -> K.query $ \a -> a.tia.read.cxm0p
+    0x01 -> K.query $ \a -> a.tia.read.cxm1p
+    0x02 -> K.query $ \a -> a.tia.read.cxp0fb
+    0x03 -> K.query $ \a -> a.tia.read.cxp1fb
+    0x04 -> K.query $ \a -> a.tia.read.cxm0fb
+    0x05 -> K.query $ \a -> a.tia.read.cxm1fb
+    0x06 -> K.query $ \a -> a.tia.read.cxblpf
+    0x07 -> K.query $ \a -> a.tia.read.cxppmm
+    0x08 -> K.query $ \a -> a.tia.read.inpt0
+    0x09 -> K.query $ \a -> a.tia.read.inpt1
+    0x0A -> K.query $ \a -> a.tia.read.inpt2
+    0x0B -> K.query $ \a -> a.tia.read.inpt3
+    0x0C -> K.query $ \a -> a.tia.read.inpt4
+    0x0D -> K.query $ \a -> a.tia.read.inpt5
     _ -> K.do
       K.katteyomi ("Attempted to read invalid TIA register: " <> T.pack (oprW16 ^. K.hex16)) ""
       K.ixpure 0

@@ -88,12 +88,6 @@ emptyAtari =
     emptyTIA
     emptyPIA
 
-
-
-
-
-
-
 {- | The Atari 2600 only had 128 bytes of RAM.
 Frankly, I'm stunned it even has that much.
 We can't even use some of these, maybe some type level
@@ -117,19 +111,23 @@ the 6507 can only see 4K at a time. (or is it 8K?)
 -}
 data Memory4K = Memory4K
   { memory4k :: Sized.Vector 4096 Word8
-  , focus :: Integer
-  {- ^ Should be a Word12, but no one cares about Word12s. Set this to -1 initially.
-  The focus should always be on the next word8 to be edited, not the word that was just edited.
-  -}
+  , focus :: Word16
+  , labels :: [Label]
   }
+  deriving (Generic.Generic)
+
+data Label = Label T.Text Word16
 
 emptyROM :: Memory4K
 emptyROM =
   Memory4K
     (Sized.replicate 0)
-    (-1)
+    0
+    []
 
--- | You don't "burn" memory onto an Atari, especially not to an EPROM chip.
+{- | Hey, son. This might seem a bit odd, but the "focus" here is
+what was just written.
+-}
 updateRom :: Memory4K -> Word8 -> Either T.Text Memory4K
 updateRom rom4k w8 =
   if rom4k.focus + 1 >= 4096 -- 0-indexed, remember?
@@ -137,8 +135,9 @@ updateRom rom4k w8 =
     else
       Right $
         Memory4K
-          (rom4k.memory4k // [(finite rom4k.focus, w8)])
+          (rom4k.memory4k // [(finite $ fromIntegral (rom4k.focus + 1), w8)])
           (rom4k.focus + 1) -- Hey, this can overflow! Maybe add some error-checking?
+          rom4k.labels
 
 {- | The Atari and the TV are so intertwined that you can't really have one
 without the other.
@@ -162,7 +161,7 @@ data TV = TV
   , region :: Region
   }
   deriving (Generic.Generic)
-  
+
 emptyTV :: TV
 emptyTV =
   TV
@@ -171,7 +170,6 @@ emptyTV =
     0
     0
     NTSC
-    
 
 advanceTV :: Int -> TV -> TV
 advanceTV cyclesToAdvance television =
@@ -210,7 +208,7 @@ data PIA = PIA
   -- ^ \$297, set 1024 clock interval (858.2 usec/interval)
   }
   deriving (Generic.Generic)
-  
+
 emptyPIA :: PIA
 emptyPIA = PIA 0 0 0 0 0 0 0 0 0
 
@@ -223,7 +221,6 @@ data TIA = TIA
   , read :: ReadTIA
   }
   deriving (Generic.Generic)
-
 
 emptyTIA :: TIA
 emptyTIA = TIA emptyWriteTIA emptyReadTIA
@@ -345,7 +342,7 @@ data WriteTIA = WriteTIA
   deriving (Generic.Generic)
 
 emptyWriteTIA :: WriteTIA
-emptyWriteTIA = WriteTIA 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -- LOL 
+emptyWriteTIA = WriteTIA 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -- LOL
 
 data Region = NTSC | PAL | SECAM -- we're only supporting NTSC for rn.
 
@@ -369,7 +366,6 @@ emptyCPU =
     0
     (word8ToFlags 0)
     0
-
 
 data Registers = Registers
   { a :: Word8

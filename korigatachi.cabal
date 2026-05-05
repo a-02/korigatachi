@@ -65,6 +65,7 @@ library
         Korigatachi.Assembly.Pattern
         Korigatachi.Assembly.Operand
         Korigatachi.Control
+        Korigatachi.Demo
         Korigatachi.Model
         Korigatachi.Monad
 

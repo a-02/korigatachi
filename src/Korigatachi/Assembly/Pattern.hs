@@ -4,6 +4,7 @@ module Korigatachi.Assembly.Pattern where
 
 import Korigatachi.Assembly.Operand
 
+-- TIA Registers
 pattern VSYNC :: Operand
 pattern VSYNC = ZeroPage 0x00 -- Vertical Sync Set-Clear
 pattern VBLANK :: Operand
@@ -94,3 +95,23 @@ pattern HMCLR :: Operand
 pattern HMCLR = ZeroPage 0x2B -- Clear Horizontal Move Registers
 pattern CXCLR :: Operand
 pattern CXCLR = ZeroPage 0x2C -- Clear Collision Latches
+
+-- PIA Registers
+pattern SWCHA :: Operand
+pattern SWCHA = Absolute 0x02 0x80
+pattern SWACNT :: Operand
+pattern SWACNT = Absolute 0x02 0x81
+pattern SWCHB :: Operand
+pattern SWCHB = Absolute 0x02 0x82
+pattern SWBCNT :: Operand
+pattern SWBCNT = Absolute 0x02 0x83
+pattern INTIM :: Operand
+pattern INTIM = Absolute 0x02 0x84
+pattern TIM1T :: Operand
+pattern TIM1T = Absolute 0x02 0x94
+pattern TIM8T :: Operand
+pattern TIM8T = Absolute 0x02 0x95
+pattern TIM64T :: Operand
+pattern TIM64T = Absolute 0x02 0x96
+pattern T1024T :: Operand
+pattern T1024T = Absolute 0x02 0x97

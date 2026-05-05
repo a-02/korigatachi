@@ -1,9 +1,9 @@
 module Korigatachi where
 
-import Korigatachi.Assembly as Assembly
-import Korigatachi.Monad
-import Korigatachi.Model (Env(..), emptyAtari, Switch (..))
 import Control.Monad (void)
+import Korigatachi.Assembly as Assembly
+import Korigatachi.Model (Env (..), Switch (..), emptyAtari)
+import Korigatachi.Monad
 
 korigatachi :: IO ()
 korigatachi = void $ runRWIT Assembly.start (Env On Off Off) emptyAtari
