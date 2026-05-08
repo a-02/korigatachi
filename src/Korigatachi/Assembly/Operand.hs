@@ -2,6 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QualifiedDo #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Korigatachi.Assembly.Operand where
 
@@ -14,7 +15,6 @@ import Control.Monad (void)
 import Data.Bits
 import Data.Char (ord)
 import Data.Maybe (fromMaybe)
-import Data.String (IsString (..))
 import Data.Word (Word16, Word8)
 
 -- bytestring
@@ -27,26 +27,12 @@ import Optics
 
 import Data.Text qualified as T
 import Korigatachi.Control qualified as K
-import Korigatachi.Model (Korigatachi)
 import Korigatachi.Model qualified as K
 import Korigatachi.Monad qualified as K
+import Korigatachi.Types (Operand(..), Korigatachi)
+import Korigatachi.Types qualified as K
+import Data.String (IsString (fromString))
 
-data Operand
-  = Accumulator -- Can technically be constructed.
-  | Implied -- Can't actually be constructed.
-  | Immediate Word8 -- #$LL
-  | IndirectX Word8 -- ($LL,x)
-  | IndirectY Word8 -- ($LL),y
-  | Relative Word8 -- r$LL
-  | ZeroPage Word8
-  | ZeroPageX Word8
-  | ZeroPageY Word8
-  | Absolute Word8 Word8
-  | AbsoluteX Word8 Word8
-  | AbsoluteY Word8 Word8
-  | Indirect Word8 Word8
-  | Label String -- What did you do?
-  deriving (Show)
 
 -- TODO: Make this actually find the correct address based on operand.
 operandToWord16 :: Operand -> Korigatachi Word16
@@ -62,8 +48,13 @@ operandToWord16 = \case
   IndirectY w8 -> K.ixpure $ fromIntegral w8
   Relative w8 -> K.ixpure $ fromIntegral w8
   ZeroPage w8 -> K.ixpure $ fromIntegral w8
-  ZeroPageX w8 -> K.ixpure $ fromIntegral w8
-  ZeroPageY w8 -> K.ixpure $ fromIntegral w8
+  ZeroPageX w8 -> K.do
+    x <- K.query $ \a -> K.x . K.generalRegisters $ K.cpu a
+    K.ixpure $ fromIntegral (w8 + x)
+  ZeroPageY w8 -> K.do
+    y <- K.query $ \a -> K.y . K.generalRegisters $ K.cpu a
+    K.ixpure $ fromIntegral (w8 + y)
+  
   Absolute ll hh ->
     let
       low = fromIntegral ll
@@ -74,14 +65,16 @@ operandToWord16 = \case
     let
       low = fromIntegral ll
       high = fromIntegral hh
-    in
-      K.ixpure $ high * 256 + low
+    in K.do
+      x <- K.query $ \a -> K.x . K.generalRegisters $ K.cpu a
+      K.ixpure $ high * 256 + low + (fromIntegral x)
   AbsoluteY ll hh ->
     let
       low = fromIntegral ll
       high = fromIntegral hh
-    in
-      K.ixpure $ high * 256 + low
+    in K.do
+      y <- K.query $ \a -> K.y . K.generalRegisters $ K.cpu a
+      K.ixpure $ high * 256 + low + (fromIntegral y)
   Indirect ll hh ->
     let
       low = fromIntegral ll
@@ -90,38 +83,34 @@ operandToWord16 = \case
       K.ixpure $ high * 256 + low
   Label label -> K.do
     romLabels <- K.query $ \a -> K.labels $ K.rom a
-    case filter (\(K.Label tx _) -> tx == (T.pack label)) romLabels of
+    case filter (\(K.MemoryLabel tx _) -> tx == (T.pack label)) romLabels of
       [] -> K.do
         K.katteyomi ("unable to resolve label: " <> T.pack label) ""
         K.ixpure 0xFFFF
-      ((K.Label _ labelLocation) : _) -> K.ixpure labelLocation
+      ((K.MemoryLabel _ labelLocation) : _) -> K.ixpure labelLocation
 
-toAddressingMode :: Operand -> K.AddressingMode
+toAddressingMode :: Operand -> T.Text
 toAddressingMode = \case
-  Accumulator -> K.Accumulator
-  Implied -> K.Implied
-  Immediate _ -> K.Immediate
-  IndirectX _ -> K.IndirectX
-  IndirectY _ -> K.IndirectY
-  Relative _ -> K.Relative
-  ZeroPage _ -> K.ZeroPage
-  ZeroPageX _ -> K.ZeroPageX
-  ZeroPageY _ -> K.ZeroPageY
-  Absolute _ _ -> K.Absolute
-  AbsoluteX _ _ -> K.AbsoluteX
-  AbsoluteY _ _ -> K.AbsoluteY
-  Indirect _ _ -> K.Indirect
-  Label _ -> K.Implied
+  Accumulator -> "Accumulator"
+  Implied -> "Implied"
+  Immediate _ -> "Immediate"
+  IndirectX _ -> "IndirectX"
+  IndirectY _ -> "IndirectY"
+  Relative _ -> "Relative"
+  ZeroPage _ -> "ZeroPage"
+  ZeroPageX _ -> "ZeroPageX"
+  ZeroPageY _ -> "ZeroPageY"
+  Absolute _ _ -> "Absolute"
+  AbsoluteX _ _ -> "AbsoluteX"
+  AbsoluteY _ _ -> "AbsoluteY"
+  Indirect _ _ -> "Indirect"
+  Label _ -> "Label"
 
--- | This isn't a valid Iso. Don't use this unless you are me.
 oprIso :: Iso' Operand String
 oprIso = iso operandToString stringToOperand
 
-flagsIso :: Iso' K.Flags Word8
-flagsIso = iso K.flagsToWord8 K.word8ToFlags
-
 instance IsString Operand where
-  fromString = (oprIso #) -- I did this just to confuse myself.
+  fromString = (oprIso #)
 
 operandToString :: Operand -> String
 operandToString Accumulator = "" -- For completeness.

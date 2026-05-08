@@ -3,6 +3,7 @@
 module Korigatachi.Assembly.Pattern where
 
 import Korigatachi.Assembly.Operand
+import Korigatachi.Types
 
 -- TIA Registers
 pattern VSYNC :: Operand

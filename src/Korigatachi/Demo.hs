@@ -15,8 +15,8 @@ module Korigatachi.Demo where
 
 import Korigatachi.Assembly
 import Korigatachi.Assembly.Pattern
-import Korigatachi.Model (Korigatachi)
 import Korigatachi.Monad qualified as K
+import Korigatachi.Types
 
 sample :: Korigatachi ()
 sample = K.do

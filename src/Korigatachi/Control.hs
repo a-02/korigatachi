@@ -13,6 +13,7 @@ import Optics
 
 import Korigatachi.Model
 import Korigatachi.Monad
+import Korigatachi.Types
 
 hex8 :: Getter Word8 String
 hex8 = to $ \w8 -> showHex w8 ""

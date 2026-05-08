@@ -64,10 +64,12 @@ library
         Korigatachi.Assembly
         Korigatachi.Assembly.Pattern
         Korigatachi.Assembly.Operand
+        Korigatachi.Assembly.ReadWrite
         Korigatachi.Control
         Korigatachi.Demo
         Korigatachi.Model
         Korigatachi.Monad
+        Korigatachi.Types
 
     -- Modules included in this library but not exported.
     -- other-modules:
