@@ -8,12 +8,11 @@
 
 module Korigatachi.Types where
 
-import Data.Word (Word8)
-import Korigatachi.Monad
-import qualified GHC.Generics as Generic
-import qualified Data.Text as T
+import Data.Text qualified as T
 import Data.Vector.Sized qualified as Sized
-import Data.Word (Word16)
+import Data.Word (Word16, Word8)
+import GHC.Generics qualified as Generic
+import Korigatachi.Monad
 import Prelude hiding (break)
 
 data Operand
@@ -132,7 +131,7 @@ data PIA = PIA
   -- ^ \$297, set 1024 clock interval (858.2 usec/interval)
   }
   deriving (Generic.Generic)
-  
+
 {- | I'm not gonna write out the addresses for all of these here.
 Reference the pattern synonyms in Korigatachi.Assembly please.
 Or find a copy of the Stella Programming Guide instead.

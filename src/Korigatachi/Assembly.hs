@@ -27,19 +27,42 @@ import Data.Text qualified as T
 
 -- korigatachi
 
+import Data.Bits (Bits (rotateR, (.&.)))
+import Data.Word (Word16, Word8)
 import Korigatachi.Assembly.Operand
 import Korigatachi.Assembly.ReadWrite
 import Korigatachi.Control qualified as K
 import Korigatachi.Model qualified as K
 import Korigatachi.Monad qualified as K
+import Korigatachi.Types (Korigatachi, Operand (..), Shorthand (..))
 import Korigatachi.Types qualified as K
 import Prelude hiding (read)
-import Korigatachi.Types (Korigatachi, Operand(..), Shorthand(..))
 
+{- | Label a part of the ROM.
+You can use this to refer to different sections of the program.
+-}
 label :: T.Text -> Korigatachi ()
 label labelText = K.do
   labelByte <- K.query $ \a -> a.rom.focus
   K.modify $ #rom % #labels %~ (\ls -> K.MemoryLabel labelText labelByte : ls)
+
+org :: Word16 -> Korigatachi ()
+org w16 = K.modify $ #rom % #focus .~ (w16 .&. 0x0FFF)
+
+word :: Word16 -> Korigatachi ()
+word w16 = K.do
+  let
+    (ll, hh) = splitWord16 w16
+  assembleROMInternal ll
+  assembleROMInternal hh
+
+splitWord16 :: Word16 -> (Word8, Word8) -- Little-endian, (LL, HH)
+splitWord16 w16 =
+  let
+    ll = w16 .&. 0x00FF
+    hh = (w16 .&. 0xFF00) `rotateR` 8
+  in
+    (fromIntegral ll, fromIntegral hh)
 
 instruct :: Shorthand -> Operand -> Korigatachi () -> Korigatachi ()
 instruct sh opr emulate =

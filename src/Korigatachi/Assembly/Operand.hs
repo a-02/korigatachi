@@ -25,14 +25,13 @@ import Optics
 
 -- korigatachi
 
+import Data.String (IsString (fromString))
 import Data.Text qualified as T
 import Korigatachi.Control qualified as K
 import Korigatachi.Model qualified as K
 import Korigatachi.Monad qualified as K
-import Korigatachi.Types (Operand(..), Korigatachi)
+import Korigatachi.Types (Korigatachi, Operand (..))
 import Korigatachi.Types qualified as K
-import Data.String (IsString (fromString))
-
 
 -- TODO: Make this actually find the correct address based on operand.
 operandToWord16 :: Operand -> Korigatachi Word16
@@ -54,7 +53,6 @@ operandToWord16 = \case
   ZeroPageY w8 -> K.do
     y <- K.query $ \a -> K.y . K.generalRegisters $ K.cpu a
     K.ixpure $ fromIntegral (w8 + y)
-  
   Absolute ll hh ->
     let
       low = fromIntegral ll
@@ -65,16 +63,18 @@ operandToWord16 = \case
     let
       low = fromIntegral ll
       high = fromIntegral hh
-    in K.do
-      x <- K.query $ \a -> K.x . K.generalRegisters $ K.cpu a
-      K.ixpure $ high * 256 + low + (fromIntegral x)
+    in
+      K.do
+        x <- K.query $ \a -> K.x . K.generalRegisters $ K.cpu a
+        K.ixpure $ high * 256 + low + (fromIntegral x)
   AbsoluteY ll hh ->
     let
       low = fromIntegral ll
       high = fromIntegral hh
-    in K.do
-      y <- K.query $ \a -> K.y . K.generalRegisters $ K.cpu a
-      K.ixpure $ high * 256 + low + (fromIntegral y)
+    in
+      K.do
+        y <- K.query $ \a -> K.y . K.generalRegisters $ K.cpu a
+        K.ixpure $ high * 256 + low + (fromIntegral y)
   Indirect ll hh ->
     let
       low = fromIntegral ll

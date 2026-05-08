@@ -31,7 +31,6 @@ import Prelude hiding (break)
 import Korigatachi.Monad
 import Korigatachi.Types
 
-
 -- | Write to the writer.
 katteyomi :: T.Text -> T.Text -> Korigatachi ()
 katteyomi logMsg codeGen = tell (Katteyomi logMsg codeGen)
@@ -45,7 +44,6 @@ emptyAtari =
     emptyTV
     emptyTIA
     emptyPIA
-
 
 emptyMemory :: Memory
 emptyMemory = Sized.replicate 0
@@ -61,7 +59,7 @@ updateMemory memory w8 address =
 emptyROM :: Memory4K
 emptyROM =
   Memory4K
-    (Sized.replicate 0)
+    (Sized.replicate 0xFF)
     0
     []
 
@@ -104,22 +102,17 @@ advanceTV cyclesToAdvance television =
       , region = television.region -- Imagine changing the region of a console while it's on.
       }
 
-
 emptyPIA :: PIA
 emptyPIA = PIA 0 0 0 0 0 0 0 0 0
-
 
 emptyTIA :: TIA
 emptyTIA = TIA emptyWriteTIA emptyReadTIA
 
-
 emptyReadTIA :: ReadTIA
 emptyReadTIA = ReadTIA 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -- lol
 
-
 emptyWriteTIA :: WriteTIA
 emptyWriteTIA = WriteTIA 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -- LOL
-
 
 emptyCPU :: MOS6507
 emptyCPU =
@@ -130,10 +123,8 @@ emptyCPU =
     (word8ToFlags 0)
     0
 
-
 emptyRegisters :: Registers
 emptyRegisters = Registers 0 0 0
-
 
 flagsToWord8 :: Flags -> Word8
 flagsToWord8 Flags {..} =
@@ -150,7 +141,6 @@ flagsToWord8 Flags {..} =
       .|. bitBool zero 1
       .|. bitBool carry 0 -- Strange, isn't it?
 
-
 word8ToFlags :: Word8 -> Flags
 word8ToFlags w8 =
   Flags
@@ -163,7 +153,6 @@ word8ToFlags w8 =
     , zero = testBit w8 1
     , carry = testBit w8 0
     }
-
 
 type ValidInstructions = InsOrd.InsOrdHashMap Word8 Instruction
 

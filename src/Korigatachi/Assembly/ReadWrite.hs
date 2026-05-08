@@ -33,9 +33,9 @@ import Korigatachi.Assembly.Operand
 import Korigatachi.Control qualified as K
 import Korigatachi.Model qualified as K
 import Korigatachi.Monad qualified as K
+import Korigatachi.Types (Korigatachi, Operand (..))
 import Korigatachi.Types qualified as K
 import Prelude hiding (read)
-import Korigatachi.Types (Korigatachi, Operand(..))
 
 -- | Write to RAM.
 writeRAMInternal :: Word8 -> Word8 -> Korigatachi ()
@@ -258,4 +258,3 @@ assembleROM = \case
 -- Once I figure out how to write sequence_ for indexed monads, I'll write this.
 -- burns :: [Word8] -> Korigatachi ()
 -- burns w8s = sequence_ $ burn <$> w8s
-

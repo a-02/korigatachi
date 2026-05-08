@@ -20,12 +20,16 @@ import Korigatachi.Types
 
 sample :: Korigatachi ()
 sample = K.do
+  org 0xF000
   start
   clearMem
   mainLoop
   waitForVblankEnd
   scanLoop
   overScanWait
+  org 0xFFFC
+  word 0xF000
+  word 0xF000
 
 -- | The standard Atari 2600 start script.
 start :: Korigatachi ()
