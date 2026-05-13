@@ -156,7 +156,11 @@ word8ToFlags w8 =
 
 type ValidInstructions = InsOrd.InsOrdHashMap Word8 Instruction
 
-validInstructions :: InsOrd.InsOrdHashMap Word8 Instruction
+filterShorthand :: Shorthand -> ValidInstructions
+filterShorthand sh =
+  InsOrd.filter (\ins -> ins.shorthand == sh) validInstructions
+
+validInstructions :: ValidInstructions
 validInstructions =
   InsOrd.fromList $
     zip

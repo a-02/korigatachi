@@ -7,18 +7,16 @@
 module Korigatachi.Assembly.Operand where
 
 -- attoparsec
-import Data.Attoparsec.ByteString.Char8 as Attoparsec
+import Data.Attoparsec.Text qualified as Attoparsec
 
 -- base
 import Control.Applicative
 import Control.Monad (void)
 import Data.Bits
 import Data.Char (ord)
-import Data.Maybe (fromMaybe)
 import Data.Word (Word16, Word8)
 
 -- bytestring
-import Data.ByteString.Char8 qualified as BSC8
 
 -- optics
 import Optics
@@ -83,9 +81,9 @@ operandToWord16 = \case
       K.ixpure $ high * 256 + low
   Label label -> K.do
     romLabels <- K.query $ \a -> K.labels $ K.rom a
-    case filter (\(K.MemoryLabel tx _) -> tx == (T.pack label)) romLabels of
+    case filter (\(K.MemoryLabel tx _) -> tx == label) romLabels of
       [] -> K.do
-        K.katteyomi ("unable to resolve label: " <> T.pack label) ""
+        K.katteyomi ("unable to resolve label: " <> label) ""
         K.ixpure 0xFFFF
       ((K.MemoryLabel _ labelLocation) : _) -> K.ixpure labelLocation
 
@@ -154,112 +152,162 @@ operandToString (Indirect ll hh) =
     high = fromIntegral hh
   in
     "($" <> ((high * 256 + low) ^. K.hex16) <> ")" -- order of operations?
-operandToString (Label lb) = lb
+operandToString (Label lb) = T.unpack lb
 
 stringToOperand :: String -> Operand
-stringToOperand operand =
+stringToOperand _operand = undefined
+
+isHexDigit :: Char -> Bool
+isHexDigit c =
   let
-    isHexDigit :: Char -> Bool
-    isHexDigit c =
-      let
-        w = ord c
-      in
-        (w >= 48 && w <= 57)
-          || (w >= 97 && w <= 102)
-          || (w >= 65 && w <= 70)
+    w = ord c
+  in
+    (w >= 48 && w <= 57)
+      || (w >= 97 && w <= 102)
+      || (w >= 65 && w <= 70)
 
-    shiftNibble :: (Num a, Bits a) => Int -> Char -> a
-    shiftNibble nibbles c
-      | w >= 48 && w <= 57 = shiftL (fromIntegral (w - 48)) (nibbles * 4)
-      | w >= 97 = shiftL (fromIntegral (w - 87)) (nibbles * 4)
-      | otherwise = shiftL (fromIntegral (w - 55)) (nibbles * 4)
-     where
-      w = ord c
+shiftNibble :: (Num a, Bits a) => Int -> Char -> a
+shiftNibble nibbles c
+  | w >= 48 && w <= 57 = shiftL (fromIntegral (w - 48)) (nibbles * 4)
+  | w >= 97 = shiftL (fromIntegral (w - 87)) (nibbles * 4)
+  | otherwise = shiftL (fromIntegral (w - 55)) (nibbles * 4)
+ where
+  w = ord c
 
-    hexDigit :: Parser Char
-    hexDigit = satisfy isHexDigit <?> "hexDigit"
+hexDigit :: Attoparsec.Parser Char
+hexDigit = Attoparsec.satisfy isHexDigit Attoparsec.<?> "hexDigit"
 
-    opr = BSC8.pack operand
+parseBaseRepresentation :: Attoparsec.Parser K.BaseRepresentation
+parseBaseRepresentation =
+  (Attoparsec.string "%" *> pure K.Binary)
+    <|> (Attoparsec.string "0" *> pure K.Octal)
+    <|> (Attoparsec.string "$" *> pure K.Hexadecimal)
+    <|> pure K.Decimal
 
-    parseWord8 :: Parser Word8
-    parseWord8 = do
+-- TODO: Finish this. Add the negate sign.
+parseWord8 :: Attoparsec.Parser Word8
+parseWord8 = do
+  baseRep <- parseBaseRepresentation
+  case baseRep of
+    K.Hexadecimal -> do
       lowerHalf <- hexDigit
       upperHalf <- hexDigit
       pure $ shiftNibble 0 lowerHalf .|. shiftNibble 1 upperHalf
+    K.Decimal -> Attoparsec.decimal
+    K.Octal -> undefined
+    K.Binary -> undefined
 
-    parseAccumulator = "A" *> pure Accumulator -- You almost never need to do this.
-    parseImplied = "" *> pure Implied
+parseAccumulator :: Attoparsec.Parser Operand
+parseAccumulator = "A" *> pure Accumulator -- You almost never need to do this.
 
-    parseImmediate = "#$" *> (Immediate <$> parseWord8)
+parseImplied :: Attoparsec.Parser Operand
+parseImplied = "" *> pure Implied
 
-    parseIndirectX = do
-      void $ string "($"
-      w8 <- parseWord8
-      void $ string ",x)"
-      pure $ IndirectX w8
+parseImmediate :: Attoparsec.Parser Operand
+parseImmediate = "#$" *> (Immediate <$> parseWord8)
 
-    parseIndirectY = do
-      void $ string "($"
-      w8 <- parseWord8
-      void $ string "),y"
-      pure $ IndirectX w8
+parseIndirectX :: Attoparsec.Parser Operand
+parseIndirectX = do
+  void $ Attoparsec.string "($"
+  w8 <- parseWord8
+  void $ Attoparsec.string ",x)"
+  pure $ IndirectX w8
 
-    parseRelative = "r$" *> (Relative <$> parseWord8)
+parseIndirectY :: Attoparsec.Parser Operand
+parseIndirectY = do
+  void $ Attoparsec.string "($"
+  w8 <- parseWord8
+  void $ Attoparsec.string "),y"
+  pure $ IndirectX w8
 
-    parseZeroPage = char '$' *> (ZeroPage <$> parseWord8)
+parseRelative :: Attoparsec.Parser Operand
+parseRelative = "r$" *> (Relative <$> parseWord8)
 
-    parseZeroPageX = do
-      void $ char '$'
-      w8 <- parseWord8
-      void $ string ",x"
-      pure $ ZeroPageX w8
+parseZeroPage :: Attoparsec.Parser Operand
+parseZeroPage = Attoparsec.char '$' *> (ZeroPage <$> parseWord8)
 
-    parseZeroPageY = do
-      void $ char '$'
-      w8 <- parseWord8
-      void $ string ",y"
-      pure $ ZeroPageY w8
+parseZeroPageX :: Attoparsec.Parser Operand
+parseZeroPageX = do
+  void $ Attoparsec.char '$'
+  w8 <- parseWord8
+  void $ Attoparsec.string ",x"
+  pure $ ZeroPageX w8
 
-    parseAbsolute = do
-      void $ char '$'
-      Absolute
-        <$> parseWord8
-        <*> parseWord8
+parseZeroPageY :: Attoparsec.Parser Operand
+parseZeroPageY = do
+  void $ Attoparsec.char '$'
+  w8 <- parseWord8
+  void $ Attoparsec.string ",y"
+  pure $ ZeroPageY w8
 
-    parseAbsoluteX = do
-      void $ char '$'
-      ll <- parseWord8
-      hh <- parseWord8
-      void $ string ",x"
-      pure $ AbsoluteX ll hh
+parseAbsolute :: Attoparsec.Parser Operand
+parseAbsolute = do
+  void $ Attoparsec.char '$'
+  Absolute
+    <$> parseWord8
+    <*> parseWord8
 
-    parseAbsoluteY = do
-      void $ char '$'
-      ll <- parseWord8
-      hh <- parseWord8
-      void $ string ",y"
-      pure $ AbsoluteY ll hh
+parseAbsoluteX :: Attoparsec.Parser Operand
+parseAbsoluteX = do
+  void $ Attoparsec.char '$'
+  ll <- parseWord8
+  hh <- parseWord8
+  void $ Attoparsec.string ",x"
+  pure $ AbsoluteX ll hh
 
-    parseIndirect = do
-      void $ string "($"
-      ll <- parseWord8
-      hh <- parseWord8
-      void $ char ')'
-      pure $ Indirect ll hh
+parseAbsoluteY :: Attoparsec.Parser Operand
+parseAbsoluteY = do
+  void $ Attoparsec.char '$'
+  ll <- parseWord8
+  hh <- parseWord8
+  void $ Attoparsec.string ",y"
+  pure $ AbsoluteY ll hh
 
-    parseOperand =
-      parseImmediate
-        <|> parseAccumulator
-        <|> parseImplied
-        <|> parseIndirectX
-        <|> parseIndirectY
-        <|> parseRelative
-        <|> parseZeroPage
-        <|> parseZeroPageX
-        <|> parseZeroPageY
-        <|> parseAbsolute
-        <|> parseAbsoluteX
-        <|> parseAbsoluteY
-        <|> parseIndirect
-  in
-    fromMaybe (Label operand) $ maybeResult (parse parseOperand opr)
+parseIndirect :: Attoparsec.Parser Operand
+parseIndirect = do
+  void $ Attoparsec.string "($"
+  ll <- parseWord8
+  hh <- parseWord8
+  void $ Attoparsec.char ')'
+  pure $ Indirect ll hh
+
+parseOperand :: Attoparsec.Parser Operand
+parseOperand =
+  parseImmediate
+    <|> parseAccumulator
+    <|> parseImplied
+    <|> parseIndirectX
+    <|> parseIndirectY
+    <|> parseRelative
+    <|> parseZeroPage
+    <|> parseZeroPageX
+    <|> parseZeroPageY
+    <|> parseAbsolute
+    <|> parseAbsoluteX
+    <|> parseAbsoluteY
+    <|> parseIndirect
+
+addressingModeToParser :: T.Text -> Attoparsec.Parser Operand
+addressingModeToParser "Accumulator" = parseAccumulator
+addressingModeToParser "Implied" = parseImplied
+addressingModeToParser "Indirect" = parseIndirect
+addressingModeToParser "IndirectX" = parseIndirectX
+addressingModeToParser "IndirectY" = parseIndirectY
+addressingModeToParser "ZeroPage" = parseZeroPage
+addressingModeToParser "ZeroPageX" = parseZeroPageX
+addressingModeToParser "ZeroPageY" = parseZeroPageY
+addressingModeToParser "Absolute" = parseAbsolute
+addressingModeToParser "AbsoluteX" = parseAbsoluteX
+addressingModeToParser "AbsoluteY" = parseAbsoluteY
+addressingModeToParser "Relative" = parseRelative
+addressingModeToParser _ = K.Label <$> Attoparsec.takeText
+
+{-
+
+how to parse an operand
+
+1. parse the outside to determine which addressing mode to use (including the '$')
+2. parse the number inside, word8 or word16 depending on mode
+  maybe negative, then prefix, then number
+
+-}

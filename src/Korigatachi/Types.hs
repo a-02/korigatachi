@@ -29,7 +29,7 @@ data Operand
   | AbsoluteX Word8 Word8
   | AbsoluteY Word8 Word8
   | Indirect Word8 Word8
-  | Label String -- What did you do?
+  | Label T.Text -- What did you do?
   deriving (Show)
 
 -- | From the Japanese for "congealed shape". The monad to rule them all.
@@ -68,10 +68,9 @@ data Atari = Atari
   , tia :: TIA
   -- ^ Television Interface Adapter.
   , pia :: PIA
-  {- ^ Off-the-shelf 6532 Peripheral Interface Adapter.
-  Technically, the RAM is controlled by this chip, but
-  it's easier to abstract the RAM to a seperate field.
-  -}
+  -- ^ Off-the-shelf 6532 Peripheral Interface Adapter.
+  --   Technically, the RAM is controlled by this chip, but
+  --   it's easier to abstract the RAM to a seperate field.
   }
   deriving (Generic.Generic)
 
@@ -358,9 +357,8 @@ data TV = TV
   , line :: Int
   -- ^ vertical position, 0-261 for NTSC.
   , hPos :: Int
-  {- ^ horizontal position, 68 "pixels" of hblank, 160 pixels of color
-  one cpu cycle is 3 "pixels", so we get 76 cycles per line. This is 0-indexed.
-  -}
+  -- ^ horizontal position, 68 "pixels" of hblank, 160 pixels of color
+  --   one cpu cycle is 3 "pixels", so we get 76 cycles per line. This is 0-indexed.
   , region :: Region
   }
   deriving (Generic.Generic)
@@ -387,3 +385,6 @@ data Memory4K = Memory4K
   deriving (Generic.Generic)
 
 data MemoryLabel = MemoryLabel T.Text Word16
+
+data BaseRepresentation = Binary | Octal | Decimal | Hexadecimal
+  deriving (Eq, Ord)
