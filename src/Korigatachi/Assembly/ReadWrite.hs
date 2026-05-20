@@ -253,7 +253,7 @@ assembleROM = \case
     K.do
       assembleROMInternal ll
       assembleROMInternal hh
-  Label err -> K.katteyomi (T.pack err) "" -- TODO: Resolve this label.
+  Label err -> K.katteyomi err "" -- TODO: Resolve this label.
 
 -- Once I figure out how to write sequence_ for indexed monads, I'll write this.
 -- burns :: [Word8] -> Korigatachi ()

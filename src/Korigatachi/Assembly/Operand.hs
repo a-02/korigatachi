@@ -31,6 +31,14 @@ import Korigatachi.Monad qualified as K
 import Korigatachi.Types (Korigatachi, Operand (..))
 import Korigatachi.Types qualified as K
 
+splitWord16 :: Word16 -> (Word8, Word8) -- Little-endian, (LL, HH)
+splitWord16 w16 =
+  let
+    ll = w16 .&. 0x00FF
+    hh = (w16 .&. 0xFF00) `rotateR` 8
+  in
+    (fromIntegral ll, fromIntegral hh)
+
 -- TODO: Make this actually find the correct address based on operand.
 operandToWord16 :: Operand -> Korigatachi Word16
 operandToWord16 = \case
@@ -157,6 +165,12 @@ operandToString (Label lb) = T.unpack lb
 stringToOperand :: String -> Operand
 stringToOperand _operand = undefined
 
+isOctalDigit :: Char -> Bool
+isOctalDigit c = let w = ord c in w >= 49 && w <= 55
+
+isBinaryDigit :: Char -> Bool
+isBinaryDigit c = let w = ord c in w >= 48 && w <= 49
+
 isHexDigit :: Char -> Bool
 isHexDigit c =
   let
@@ -166,16 +180,32 @@ isHexDigit c =
       || (w >= 97 && w <= 102)
       || (w >= 65 && w <= 70)
 
-shiftNibble :: (Num a, Bits a) => Int -> Char -> a
-shiftNibble nibbles c
-  | w >= 48 && w <= 57 = shiftL (fromIntegral (w - 48)) (nibbles * 4)
-  | w >= 97 = shiftL (fromIntegral (w - 87)) (nibbles * 4)
-  | otherwise = shiftL (fromIntegral (w - 55)) (nibbles * 4)
+shiftChar :: (Num a, Bits a) => Int -> Int -> Char -> a
+shiftChar bits nibbles c 
+  | w >= 48 && w <= 57 = shiftL (fromIntegral (w - 48)) (nibbles * bits)
+  | w >= 97 = shiftL (fromIntegral (w - 87)) (nibbles * bits)
+  | otherwise = shiftL (fromIntegral (w - 55)) (nibbles * bits)
  where
   w = ord c
 
+shiftNibble :: (Num a, Bits a) => Int -> Char -> a
+shiftNibble = shiftChar 4
+
+shiftTriade :: (Num a, Bits a) => Int -> Char -> a
+shiftTriade = shiftChar 3
+
+shiftBinary :: (Num a, Bits a) => Int -> Char -> a
+shiftBinary = shiftChar 1
+
 hexDigit :: Attoparsec.Parser Char
 hexDigit = Attoparsec.satisfy isHexDigit Attoparsec.<?> "hexDigit"
+
+octalDigit :: Attoparsec.Parser Char
+octalDigit = Attoparsec.satisfy isOctalDigit Attoparsec.<?> "octalDigit"
+
+binaryDigit :: Attoparsec.Parser Char
+binaryDigit = Attoparsec.satisfy isBinaryDigit Attoparsec.<?> "binaryDigit"
+
 
 parseBaseRepresentation :: Attoparsec.Parser K.BaseRepresentation
 parseBaseRepresentation =
@@ -184,18 +214,27 @@ parseBaseRepresentation =
     <|> (Attoparsec.string "$" *> pure K.Hexadecimal)
     <|> pure K.Decimal
 
--- TODO: Finish this. Add the negate sign.
+signed :: Num a => Attoparsec.Parser a -> Attoparsec.Parser a
+signed p = (negate <$> (Attoparsec.char '-' *> p)) <|> p
+
 parseWord8 :: Attoparsec.Parser Word8
-parseWord8 = do
-  baseRep <- parseBaseRepresentation
-  case baseRep of
-    K.Hexadecimal -> do
-      lowerHalf <- hexDigit
-      upperHalf <- hexDigit
-      pure $ shiftNibble 0 lowerHalf .|. shiftNibble 1 upperHalf
-    K.Decimal -> Attoparsec.decimal
-    K.Octal -> undefined
-    K.Binary -> undefined
+parseWord8 = fromIntegral <$> parseWord16
+
+parseWord16 :: Attoparsec.Parser Word16
+parseWord16 = signed $
+  do
+    baseRep <- parseBaseRepresentation
+    case baseRep of
+      K.Hexadecimal -> do
+        nibbles <- reverse <$> Attoparsec.many1' hexDigit
+        pure . getAnd . foldMap And $ zipWith shiftNibble [0..] nibbles
+      K.Octal -> do
+        triades <- reverse <$> Attoparsec.many1' octalDigit
+        pure . getAnd . foldMap And $ zipWith shiftTriade [0..] triades
+      K.Binary -> do
+        bits <- reverse <$> Attoparsec.many1' binaryDigit
+        pure . getAnd . foldMap And $ zipWith shiftBinary [0..] bits
+      K.Decimal -> Attoparsec.decimal
 
 parseAccumulator :: Attoparsec.Parser Operand
 parseAccumulator = "A" *> pure Accumulator -- You almost never need to do this.
@@ -221,7 +260,7 @@ parseIndirectY = do
   pure $ IndirectX w8
 
 parseRelative :: Attoparsec.Parser Operand
-parseRelative = "r$" *> (Relative <$> parseWord8)
+parseRelative = Attoparsec.char '$' *> (Relative <$> parseWord8)
 
 parseZeroPage :: Attoparsec.Parser Operand
 parseZeroPage = Attoparsec.char '$' *> (ZeroPage <$> parseWord8)
@@ -250,24 +289,21 @@ parseAbsolute = do
 parseAbsoluteX :: Attoparsec.Parser Operand
 parseAbsoluteX = do
   void $ Attoparsec.char '$'
-  ll <- parseWord8
-  hh <- parseWord8
+  (ll, hh) <- splitWord16 <$> parseWord16
   void $ Attoparsec.string ",x"
   pure $ AbsoluteX ll hh
 
 parseAbsoluteY :: Attoparsec.Parser Operand
 parseAbsoluteY = do
   void $ Attoparsec.char '$'
-  ll <- parseWord8
-  hh <- parseWord8
+  (ll, hh) <- splitWord16 <$> parseWord16
   void $ Attoparsec.string ",y"
   pure $ AbsoluteY ll hh
 
 parseIndirect :: Attoparsec.Parser Operand
 parseIndirect = do
   void $ Attoparsec.string "($"
-  ll <- parseWord8
-  hh <- parseWord8
+  (ll, hh) <- splitWord16 <$> parseWord16
   void $ Attoparsec.char ')'
   pure $ Indirect ll hh
 

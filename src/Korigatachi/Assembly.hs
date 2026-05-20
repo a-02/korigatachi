@@ -27,8 +27,10 @@ import Data.Text qualified as T
 
 -- korigatachi
 
-import Data.Bits (Bits (rotateR, (.&.)))
-import Data.Word (Word16, Word8)
+import Data.Attoparsec.Text qualified as Attoparsec
+import Data.Bits (Bits ((.&.)))
+import Data.List as List (find)
+import Data.Word (Word16)
 import Korigatachi.Assembly.Operand
 import Korigatachi.Assembly.ReadWrite
 import Korigatachi.Control qualified as K
@@ -37,6 +39,8 @@ import Korigatachi.Monad qualified as K
 import Korigatachi.Types (Korigatachi, Operand (..), Shorthand (..))
 import Korigatachi.Types qualified as K
 import Prelude hiding (read)
+import Control.Applicative ((<|>))
+import Data.Maybe (fromMaybe)
 
 {- | Label a part of the ROM.
 You can use this to refer to different sections of the program.
@@ -56,13 +60,6 @@ word w16 = K.do
   assembleROMInternal ll
   assembleROMInternal hh
 
-splitWord16 :: Word16 -> (Word8, Word8) -- Little-endian, (LL, HH)
-splitWord16 w16 =
-  let
-    ll = w16 .&. 0x00FF
-    hh = (w16 .&. 0xFF00) `rotateR` 8
-  in
-    (fromIntegral ll, fromIntegral hh)
 
 instruct :: Shorthand -> Operand -> Korigatachi () -> Korigatachi ()
 instruct sh opr emulate =
@@ -77,6 +74,28 @@ instruct sh opr emulate =
       K.when env.emulator $ emulate
       K.when env.display $ K.do
         advanceTV instruction
+
+-- TODO: We can do better than this double Maybe nonsense.
+-- Same with filtering the validInstructions list TWICE.
+instructText :: Shorthand -> T.Text -> Korigatachi () -> Korigatachi ()
+instructText sh oprText emulate = 
+  let
+    relevantAddressingModes = InsOrd.toList $ (\ins -> ins.addressingMode) <$> K.filterShorthand sh
+    parser = foldl1' (<|>) $ addressingModeToParser . snd <$> relevantAddressingModes
+    maybeOpr = Attoparsec.maybeResult $ Attoparsec.parse parser oprText
+    parsedAddressingMode = maybe "" toAddressingMode maybeOpr
+    bytecode = fromMaybe 255 $ fst <$> List.find (\(_, x) -> parsedAddressingMode == x) relevantAddressingModes
+    instruction = InsOrd.lookupDefault K.jamInstruction bytecode K.validInstructions
+  in
+    K.do
+      env <- K.ask
+      K.when env.assembler $ K.do
+        K.katteyomi "" (T.toLower . T.pack $ show sh <> " " <> opr ^. oprIso <> "\n")
+        assembleROMInternal instruction.opcode
+      K.when env.emulator $ emulate
+      K.when env.display $ K.do
+        advanceTV instruction
+    
 
 dex :: Korigatachi ()
 dex = instruct DEX Implied (K.ixpure ()) -- TODO: Decrement X by one.
