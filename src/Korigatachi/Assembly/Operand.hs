@@ -35,11 +35,10 @@ splitWord16 :: Word16 -> (Word8, Word8) -- Little-endian, (LL, HH)
 splitWord16 w16 =
   let
     ll = w16 .&. 0x00FF
-    hh = (w16 .&. 0xFF00) `rotateR` 8
+    hh = (w16 .&. 0xFF00) `rotateR` 8 -- move the top 8 bits to the bottom
   in
     (fromIntegral ll, fromIntegral hh)
 
--- TODO: Make this actually find the correct address based on operand.
 operandToWord16 :: Operand -> Korigatachi Word16
 operandToWord16 = \case
   Accumulator -> K.do
@@ -181,7 +180,7 @@ isHexDigit c =
       || (w >= 65 && w <= 70)
 
 shiftChar :: (Num a, Bits a) => Int -> Int -> Char -> a
-shiftChar bits nibbles c 
+shiftChar bits nibbles c
   | w >= 48 && w <= 57 = shiftL (fromIntegral (w - 48)) (nibbles * bits)
   | w >= 97 = shiftL (fromIntegral (w - 87)) (nibbles * bits)
   | otherwise = shiftL (fromIntegral (w - 55)) (nibbles * bits)
@@ -206,7 +205,6 @@ octalDigit = Attoparsec.satisfy isOctalDigit Attoparsec.<?> "octalDigit"
 binaryDigit :: Attoparsec.Parser Char
 binaryDigit = Attoparsec.satisfy isBinaryDigit Attoparsec.<?> "binaryDigit"
 
-
 parseBaseRepresentation :: Attoparsec.Parser K.BaseRepresentation
 parseBaseRepresentation =
   (Attoparsec.string "%" *> pure K.Binary)
@@ -227,13 +225,13 @@ parseWord16 = signed $
     case baseRep of
       K.Hexadecimal -> do
         nibbles <- reverse <$> Attoparsec.many1' hexDigit
-        pure . getAnd . foldMap And $ zipWith shiftNibble [0..] nibbles
+        pure . getAnd . foldMap And $ zipWith shiftNibble [0 ..] nibbles
       K.Octal -> do
         triades <- reverse <$> Attoparsec.many1' octalDigit
-        pure . getAnd . foldMap And $ zipWith shiftTriade [0..] triades
+        pure . getAnd . foldMap And $ zipWith shiftTriade [0 ..] triades
       K.Binary -> do
         bits <- reverse <$> Attoparsec.many1' binaryDigit
-        pure . getAnd . foldMap And $ zipWith shiftBinary [0..] bits
+        pure . getAnd . foldMap And $ zipWith shiftBinary [0 ..] bits
       K.Decimal -> Attoparsec.decimal
 
 parseAccumulator :: Attoparsec.Parser Operand

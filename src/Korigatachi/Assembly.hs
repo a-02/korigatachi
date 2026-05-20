@@ -27,9 +27,11 @@ import Data.Text qualified as T
 
 -- korigatachi
 
+import Control.Applicative ((<|>))
 import Data.Attoparsec.Text qualified as Attoparsec
 import Data.Bits (Bits ((.&.)))
 import Data.List as List (find)
+import Data.Maybe (fromMaybe)
 import Data.Word (Word16)
 import Korigatachi.Assembly.Operand
 import Korigatachi.Assembly.ReadWrite
@@ -39,8 +41,6 @@ import Korigatachi.Monad qualified as K
 import Korigatachi.Types (Korigatachi, Operand (..), Shorthand (..))
 import Korigatachi.Types qualified as K
 import Prelude hiding (read)
-import Control.Applicative ((<|>))
-import Data.Maybe (fromMaybe)
 
 {- | Label a part of the ROM.
 You can use this to refer to different sections of the program.
@@ -60,29 +60,17 @@ word w16 = K.do
   assembleROMInternal ll
   assembleROMInternal hh
 
-
-instruct :: Shorthand -> Operand -> Korigatachi () -> Korigatachi ()
-instruct sh opr emulate =
-  case lookupInstruction sh opr of
-    Nothing ->
-      K.katteyomi ("Coudn't find instruction in lookup table: " <> T.pack (show sh) <> " " <> T.pack (show opr)) ""
-    Just instruction -> K.do
-      env <- K.ask
-      K.when env.assembler $ K.do
-        K.katteyomi "" (T.toLower . T.pack $ show sh <> " " <> opr ^. oprIso <> "\n")
-        assembleROMInternal instruction.opcode
-      K.when env.emulator $ emulate
-      K.when env.display $ K.do
-        advanceTV instruction
-
--- TODO: We can do better than this double Maybe nonsense.
--- Same with filtering the validInstructions list TWICE.
-instructText :: Shorthand -> T.Text -> Korigatachi () -> Korigatachi ()
-instructText sh oprText emulate = 
+-- TODO: This is so fucking ugly.
+instructText :: Shorthand -> T.Text -> (Operand -> Korigatachi ()) -> Korigatachi ()
+instructText sh oprText emulate =
   let
+    instructionTextRep = K.shorthandText sh <> " " <> oprText
+
     relevantAddressingModes = InsOrd.toList $ (\ins -> ins.addressingMode) <$> K.filterShorthand sh
     parser = foldl1' (<|>) $ addressingModeToParser . snd <$> relevantAddressingModes
+
     maybeOpr = Attoparsec.maybeResult $ Attoparsec.parse parser oprText
+    opr = fromMaybe (Label oprText) maybeOpr
     parsedAddressingMode = maybe "" toAddressingMode maybeOpr
     bytecode = fromMaybe 255 $ fst <$> List.find (\(_, x) -> parsedAddressingMode == x) relevantAddressingModes
     instruction = InsOrd.lookupDefault K.jamInstruction bytecode K.validInstructions
@@ -90,66 +78,65 @@ instructText sh oprText emulate =
     K.do
       env <- K.ask
       K.when env.assembler $ K.do
-        K.katteyomi "" (T.toLower . T.pack $ show sh <> " " <> opr ^. oprIso <> "\n")
+        K.katteyomi "" instructionTextRep
         assembleROMInternal instruction.opcode
-      K.when env.emulator $ emulate
+      K.when env.emulator $ (emulate opr)
       K.when env.display $ K.do
         advanceTV instruction
-    
 
 dex :: Korigatachi ()
-dex = instruct DEX Implied (K.ixpure ()) -- TODO: Decrement X by one.
+dex = instructText DEX "Implied" (\_ -> K.ixpure ()) -- TODO: Decrement X by one.
 
 dey :: Korigatachi ()
-dey = instruct DEX Implied (K.ixpure ()) -- TODO: Decrement Y by one.
+dey = instructText DEX "Implied" (\_ -> K.ixpure ()) -- TODO: Decrement Y by one.
 
-bne :: Operand -> Korigatachi ()
-bne opr = instruct BNE opr (K.ixpure ()) -- TODO: Break if non zero.
+bne :: T.Text -> Korigatachi ()
+bne oprText = instructText BNE oprText (\_ -> K.ixpure ()) -- TODO: Break if non zero.
 
-jmp :: Operand -> Korigatachi ()
-jmp opr = instruct JMP opr (K.ixpure ()) -- TODO: Jump to instruction.
+jmp :: T.Text -> Korigatachi ()
+jmp oprText = instructText JMP oprText (\_ -> K.ixpure ()) -- TODO: Jump to instruction.
 
 cld :: Korigatachi ()
-cld = instruct CLD Implied (clearFlags 0b000010000)
+cld = instructText CLD "Implied" (\_ -> clearFlags 0b000010000)
 
-lda :: Operand -> Korigatachi ()
-lda opr = instruct LDA opr $ K.do
+lda :: T.Text -> Korigatachi ()
+lda oprText = instructText LDA oprText $ \opr -> K.do
   val <- readOpr opr
   K.modify $ #cpu % #generalRegisters % #a .~ val
 
-ldx :: Operand -> Korigatachi ()
-ldx opr = instruct LDX opr $ K.do
+ldx :: T.Text -> Korigatachi ()
+ldx oprText = instructText LDX oprText $ \opr -> K.do
   val <- readOpr opr
   K.modify $ #cpu % #generalRegisters % #x .~ val
 
-ldy :: Operand -> Korigatachi ()
-ldy opr = instruct LDY opr $ K.do
+ldy :: T.Text -> Korigatachi ()
+ldy oprText = instructText LDY oprText $ \opr -> K.do
   val <- readOpr opr
   K.modify $ #cpu % #generalRegisters % #y .~ val
 
 sei :: Korigatachi ()
-sei = instruct SEI Implied (setFlags 0b00000100)
+sei = instructText SEI "Implied" (\_ -> setFlags 0b00000100)
 
-sta :: Operand -> Korigatachi ()
-sta opr = instruct STA opr $
+sta :: T.Text -> Korigatachi ()
+sta oprText = instructText STA oprText $ \opr ->
   K.do
     atari <- K.get
     write atari.cpu.generalRegisters.a opr
 
-stx :: Operand -> Korigatachi ()
-stx opr = instruct STX opr $
+stx :: T.Text -> Korigatachi ()
+stx oprText = instructText STX oprText $ \opr ->
   K.do
     atari <- K.get
     write atari.cpu.generalRegisters.x opr
 
-sty :: Operand -> Korigatachi ()
-sty opr = instruct STX opr $
+sty :: T.Text -> Korigatachi ()
+sty oprText = instructText STX oprText $ \opr ->
   K.do
     atari <- K.get
     write atari.cpu.generalRegisters.y opr
 
 txs :: Korigatachi ()
-txs = instruct TXS Implied $
+txs = instructText TXS "Implied" $ \_ ->
   K.modify $
     \atari -> atari & #cpu % #stackPointer .~ (atari ^. #cpu % #generalRegisters % #x)
 

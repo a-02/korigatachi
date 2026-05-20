@@ -68,9 +68,10 @@ data Atari = Atari
   , tia :: TIA
   -- ^ Television Interface Adapter.
   , pia :: PIA
-  -- ^ Off-the-shelf 6532 Peripheral Interface Adapter.
-  --   Technically, the RAM is controlled by this chip, but
-  --   it's easier to abstract the RAM to a seperate field.
+  {- ^ Off-the-shelf 6532 Peripheral Interface Adapter.
+  Technically, the RAM is controlled by this chip, but
+  it's easier to abstract the RAM to a seperate field.
+  -}
   }
   deriving (Generic.Generic)
 
@@ -339,7 +340,85 @@ data Shorthand
   | TXS -- Done?
   | TYA
   | UBC
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
+
+shorthandText :: Shorthand -> T.Text
+shorthandText ADC = "adc"
+shorthandText ANC = "anc"
+shorthandText AND = "and"
+shorthandText ANE = "ane"
+shorthandText ALR = "alr"
+shorthandText ARR = "arr"
+shorthandText ASL = "asl"
+shorthandText BCC = "bcc"
+shorthandText BCS = "bcs"
+shorthandText BEQ = "beq"
+shorthandText BIT = "bit"
+shorthandText BMI = "bmi"
+shorthandText BNE = "bne"
+shorthandText BPL = "bpl"
+shorthandText BRK = "brk"
+shorthandText BVC = "bvc"
+shorthandText BVS = "bvs"
+shorthandText CLC = "clc"
+shorthandText CLD = "cld"
+shorthandText CLI = "cli"
+shorthandText CLV = "clv"
+shorthandText CMP = "cmp"
+shorthandText CPX = "cpx"
+shorthandText CPY = "cpy"
+shorthandText DCP = "dcp"
+shorthandText DEC = "dec"
+shorthandText DEX = "dex"
+shorthandText DEY = "dey"
+shorthandText EOR = "eor"
+shorthandText INC = "inc"
+shorthandText INX = "inx"
+shorthandText INY = "iny"
+shorthandText ISC = "isc"
+shorthandText JAM = "jam"
+shorthandText JMP = "jmp"
+shorthandText JSR = "jsr"
+shorthandText LAS = "las"
+shorthandText LAX = "lax"
+shorthandText LDA = "lda"
+shorthandText LDX = "ldx"
+shorthandText LDY = "ldy"
+shorthandText LSR = "lsr"
+shorthandText LXA = "lxa"
+shorthandText NOP = "nop"
+shorthandText ORA = "ora"
+shorthandText PHA = "pha"
+shorthandText PHP = "php"
+shorthandText PLA = "pla"
+shorthandText PLP = "plp"
+shorthandText RLA = "rla"
+shorthandText ROL = "rol"
+shorthandText ROR = "ror"
+shorthandText RRA = "rra"
+shorthandText RTI = "rti"
+shorthandText RTS = "rts"
+shorthandText SAX = "sax"
+shorthandText SBC = "sbc"
+shorthandText SBX = "sbx"
+shorthandText SEC = "sec"
+shorthandText SED = "sed"
+shorthandText SEI = "sei"
+shorthandText SHA = "sha"
+shorthandText SHY = "shy"
+shorthandText SLO = "slo"
+shorthandText SRE = "sre"
+shorthandText STA = "sta"
+shorthandText STX = "stx"
+shorthandText STY = "sty"
+shorthandText TAS = "tas"
+shorthandText TAX = "tax"
+shorthandText TAY = "tay"
+shorthandText TSX = "tsx"
+shorthandText TXA = "txa"
+shorthandText TXS = "txs"
+shorthandText TYA = "tya"
+shorthandText UBC = "ubc"
 
 {- | The Atari and the TV are so intertwined that you can't really have one
 without the other.
@@ -357,8 +436,9 @@ data TV = TV
   , line :: Int
   -- ^ vertical position, 0-261 for NTSC.
   , hPos :: Int
-  -- ^ horizontal position, 68 "pixels" of hblank, 160 pixels of color
-  --   one cpu cycle is 3 "pixels", so we get 76 cycles per line. This is 0-indexed.
+  {- ^ horizontal position, 68 "pixels" of hblank, 160 pixels of color
+  one cpu cycle is 3 "pixels", so we get 76 cycles per line. This is 0-indexed.
+  -}
   , region :: Region
   }
   deriving (Generic.Generic)
