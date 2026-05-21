@@ -1,10 +1,22 @@
+{-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 module Korigatachi where
 
-import Control.Monad (void)
+import Data.ByteString qualified as ByteString
+import Data.Text.IO.Utf8 qualified as Text.IO.Utf8
+import Data.Vector.Sized qualified as Sized
 import Korigatachi.Demo as Demo
 import Korigatachi.Model (emptyAtari)
 import Korigatachi.Monad
 import Korigatachi.Types
 
 korigatachi :: IO ()
-korigatachi = void $ runRWIT Demo.start (Env On Off Off) emptyAtari
+korigatachi = do
+  (_, atr, kty) <- runRWIT Demo.sample (Env On Off Off) emptyAtari
+  let
+    bin = ByteString.pack $ Sized.toList atr.rom.memory4k
+  ByteString.putStr bin
+  ByteString.writeFile "start.bin" bin
+  Text.IO.Utf8.writeFile "korigatachi.log" kty.logs
+  Text.IO.Utf8.writeFile "start.asm" kty.codegen  
+  pure ()
