@@ -20,6 +20,7 @@ import Korigatachi.Types
 
 sample :: Korigatachi ()
 sample = K.do
+  preamble
   org 0xF000
   start
   clearMem

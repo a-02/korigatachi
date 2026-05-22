@@ -86,7 +86,18 @@ data Env = Env
   { assembler :: Switch
   , emulator :: Switch
   , display :: Switch
+  , logLevel :: LogLevel
   }
+
+data LogLevel = Test | Info | Note | Warn | Crit
+  deriving (Eq, Ord)
+
+instance Show LogLevel where
+  show Test = "[TEST] "
+  show Info = "[INFO] "
+  show Note = "[NOTE] "
+  show Warn = "[WARN] "
+  show Crit = "[CRIT] "
 
 data Switch = On | Off
 
@@ -98,6 +109,7 @@ data Instruction = Instruction
   , cycles :: Int
   , description :: T.Text
   }
+  deriving (Show)
 
 data Flags = Flags
   { negative :: Bool
@@ -341,6 +353,9 @@ data Shorthand
   | TYA
   | UBC
   deriving (Eq, Ord)
+
+instance Show Shorthand where
+  show sh = T.unpack $ shorthandText sh
 
 shorthandText :: Shorthand -> T.Text
 shorthandText ADC = "adc"

@@ -148,4 +148,6 @@ test-suite korigatachi-test
     -- Test dependencies.
     build-depends:
         base,
+        criterion,
+        hspec,
         korigatachi

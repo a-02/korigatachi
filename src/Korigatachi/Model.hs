@@ -4,6 +4,7 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Korigatachi.Model where
@@ -28,12 +29,27 @@ import Data.Word (Word8)
 import Prelude hiding (break)
 
 -- korigatachi
-import Korigatachi.Monad
+import Korigatachi.Monad as K
 import Korigatachi.Types
 
 -- | Write to the writer.
 katteyomi :: T.Text -> T.Text -> Korigatachi ()
-katteyomi logMsg codeGen = tell (Katteyomi logMsg codeGen)
+katteyomi logMsg code = tell (Katteyomi logMsg code)
+
+-- | Log a message regardless of loglevel.
+logAny :: T.Text -> Korigatachi ()
+logAny logMsg = katteyomi (logMsg <> "\n") ""
+
+-- | Output generated code to the writer.
+codeGen :: T.Text -> Korigatachi ()
+codeGen code = katteyomi "" (code <> "\n")
+
+log :: LogLevel -> T.Text -> Korigatachi ()
+log level logMsg = K.do
+  currentLevel <- logLevel <$> K.ask
+  if level >= currentLevel
+    then logAny (T.show level <> logMsg)
+    else K.ixpure ()
 
 emptyAtari :: Atari
 emptyAtari =
@@ -73,7 +89,7 @@ updateRom rom4k w8 =
     else
       Right $
         Memory4K
-          (rom4k.memory4k // [(finite $ fromIntegral (rom4k.focus + 1), w8)])
+          (rom4k.memory4k // [(finite $ fromIntegral rom4k.focus, w8)])
           (rom4k.focus + 1) -- Hey, this can overflow! Maybe add some error-checking?
           rom4k.labels
 

@@ -334,6 +334,7 @@ addressingModeToParser "Absolute" = parseAbsolute
 addressingModeToParser "AbsoluteX" = parseAbsoluteX
 addressingModeToParser "AbsoluteY" = parseAbsoluteY
 addressingModeToParser "Relative" = parseRelative
+addressingModeToParser "Immediate" = parseImmediate
 addressingModeToParser _ = K.Label <$> Attoparsec.takeText
 
 {-
