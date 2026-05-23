@@ -44,6 +44,9 @@ logAny logMsg = katteyomi (logMsg <> "\n") ""
 codeGen :: T.Text -> Korigatachi ()
 codeGen code = katteyomi "" (code <> "\n")
 
+-- | Log a message at a specific log level.
+-- This will only log messages that are at or above
+-- the current verbosity level of the program.
 log :: LogLevel -> T.Text -> Korigatachi ()
 log level logMsg = K.do
   currentLevel <- logLevel <$> K.ask
@@ -51,6 +54,7 @@ log level logMsg = K.do
     then logAny (T.show level <> logMsg)
     else K.ixpure ()
 
+-- | An Atari with nothing. Every register is 0'd out.
 emptyAtari :: Atari
 emptyAtari =
   Atari

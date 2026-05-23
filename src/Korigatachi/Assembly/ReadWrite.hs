@@ -55,12 +55,15 @@ assembleROMInternal w8 = K.do
     Right rom4k ->
       K.put (atari & #rom .~ rom4k)
 
+-- | Swap between Flags and a Word8.
 flagsIso :: Iso' K.Flags Word8
 flagsIso = iso K.flagsToWord8 K.word8ToFlags
 
+-- | Set a specific flag to be on, leaving the others unaffected.
 setFlags :: Word8 -> Korigatachi ()
 setFlags flagsW8 = K.modify $ #cpu % #statusRegister %~ (flagsIso %~ (flagsW8 .|.))
 
+-- | Clear a flag so that it is off.
 clearFlags :: Word8 -> Korigatachi ()
 clearFlags flagsW8 = K.modify $ #cpu % #statusRegister %~ (flagsIso %~ (complement flagsW8 .&.))
 
