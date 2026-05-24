@@ -13,26 +13,11 @@
 
 module Korigatachi.Assembly where
 
--- base
-import Data.List
-
--- insert-ordered-containers
-import Data.HashMap.Strict.InsOrd qualified as InsOrd
-
--- optics
-import Optics
-
--- text
-import Data.Text qualified as T
-
--- korigatachi
-
-import Control.Applicative ((<|>))
 import Data.Attoparsec.Text qualified as Attoparsec
 import Data.Bits (Bits ((.&.)))
-import Data.List as List (find)
-import Data.Maybe (fromMaybe)
-import Data.Word (Word16)
+import Data.HashMap.Strict.InsOrd qualified as InsOrd
+import Data.Text qualified as T
+import Data.Word (Word16, Word8)
 import Korigatachi.Assembly.Operand
 import Korigatachi.Assembly.ReadWrite
 import Korigatachi.Control qualified as K
@@ -40,6 +25,8 @@ import Korigatachi.Model qualified as K
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types (Korigatachi, Operand (..), Shorthand (..))
 import Korigatachi.Types qualified as K
+import Optics
+import Witherable (Witherable (wither))
 import Prelude hiding (read)
 
 spacing :: T.Text
@@ -77,7 +64,7 @@ word w16 = K.do
   assembleROMInternal hh
   K.codeGen (spacing <> ".word $" <> (T.pack $ w16 ^. K.hex16))
 
--- TODO: This is so fucking ugly.
+-- TODO: This is better? But still misdesigned.
 instruct :: Shorthand -> T.Text -> (Operand -> Korigatachi ()) -> Korigatachi ()
 instruct sh oprText emulate =
   K.do
@@ -88,21 +75,52 @@ instruct sh oprText emulate =
       -- We can do this since none of the members of validInstructions have the same shorthand
       -- but two entries with Relative and Implied addressing respectively.
       relevantAddressingModes = InsOrd.toList $ (\ins -> ins.addressingMode) <$> K.filterShorthand sh
-      parser = foldl1' (<|>) $ addressingModeToParser . snd <$> relevantAddressingModes
-      opr = fromMaybe (Label oprText) . Attoparsec.maybeResult $ Attoparsec.parse parser oprText
-      bytecode = fromMaybe 255 $ fst <$> List.find (\(_, x) -> (toAddressingMode opr) == x) relevantAddressingModes
-      instruction = InsOrd.lookupDefault K.jamInstruction bytecode K.validInstructions
+
     K.when env.assembler $ K.do
+      -- LETS FUCKING GOOOOOOOOOOOOOOOOOOOOOOO
       K.log K.Info ("Assembling: " <> K.shorthandText sh <> " " <> oprText)
       K.log K.Test ("Relevant Addressing Modes: " <> T.show relevantAddressingModes)
-      K.log K.Test ("Parsed operand: " <> T.show opr)
-      K.log K.Test ("Bytecode: " <> T.show bytecode)
-      K.log K.Test ("Instruction: " <> T.show instruction)
-      K.codeGen (spacing <> K.shorthandText sh <> " " <> oprText)
-      assembleROMInternal instruction.opcode
-    K.when env.emulator $ (emulate opr)
-    K.when env.display $ K.do
-      advanceTV instruction
+      withered <- wither (matchParser oprText) relevantAddressingModes
+      case withered of
+        [] -> K.do
+          K.log K.Warn ("Failed to parse operand: " <> oprText)
+        ((bytecode, opr) : _) -> K.do
+          let
+            instruction = InsOrd.lookupDefault K.jamInstruction bytecode K.validInstructions
+          K.log K.Test ("Parsed operand: " <> T.show opr)
+          K.log K.Test ("Bytecode: " <> T.show bytecode)
+          K.log K.Test ("Instruction: " <> T.show instruction)
+
+          K.when env.emulator $ (emulate opr)
+
+          K.when env.display $ K.do
+            advanceTV instruction
+
+          K.codeGen (spacing <> K.shorthandText sh <> " " <> oprText)
+
+          assembleROMInternal instruction.opcode
+
+matchParser :: T.Text -> (Word8, T.Text) -> Korigatachi (Maybe (Word8, Operand))
+matchParser oprText (w8, addressingMode) = K.do
+  let
+    thing = Attoparsec.eitherResult $ Attoparsec.parse (addressingModeToParser addressingMode) oprText
+  case thing of
+    Left failedParse -> K.do
+      K.log
+        K.Info
+        ( foldl1 (<>)
+            [ "Failed to parse \""
+            , oprText
+            , "\" as "
+            , addressingMode
+            , ": "
+            , T.pack failedParse
+            ]
+        )
+      K.ixpure Nothing
+    Right operand -> K.do
+      K.log K.Info ("Parsing " <> oprText <> " succeeded.")
+      K.ixpure $ Just (w8, operand)
 
 dex :: Korigatachi ()
 dex = instruct DEX "" (\_ -> K.ixpure ()) -- TODO: Decrement X by one.

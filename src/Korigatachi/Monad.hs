@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PolyKinds #-}
@@ -28,6 +29,13 @@ newtype RWIT r w m i j a = RWIT {runRWIT :: r -> i -> m (a, j, w)}
 instance Functor m => Functor (RWIT r w m i j) where
   fmap :: (a -> b) -> RWIT r w m i j a -> RWIT r w m i j b
   fmap f (RWIT k) = RWIT $ \r i -> k r i <&> \case (a, j, w) -> (f a, j, w)
+
+-- | Don't look at me. I'm hideous.
+instance (Monad m, Monoid w) => Applicative (RWIT r w m i i) where
+  liftA2 :: (a -> b -> c) -> RWIT r w m i i a -> RWIT r w m i i b -> RWIT r w m i i c
+  liftA2 f fa fb = (ixpure f) `ixap` fa `ixap` fb
+  pure :: a -> RWIT r w m i i a
+  pure = ixpure
 
 class (forall i j. Functor (f i j)) => IndexedApplicative f where
   ixpure :: a -> f i i a

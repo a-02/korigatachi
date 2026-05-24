@@ -91,7 +91,8 @@ library
         template-haskell,
         th-lift,
         transformers,
-        vector-sized
+        vector-sized,
+        witherable
 
     -- Directories containing source files.
     hs-source-dirs:   src
