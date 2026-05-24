@@ -241,7 +241,7 @@ parseImplied :: Attoparsec.Parser Operand
 parseImplied = "" *> pure Implied
 
 parseImmediate :: Attoparsec.Parser Operand
-parseImmediate = "#$" *> (Immediate <$> parseWord8)
+parseImmediate = "#" *> (Immediate <$> parseWord8)
 
 parseIndirectX :: Attoparsec.Parser Operand
 parseIndirectX = do
@@ -265,42 +265,37 @@ parseZeroPage = Attoparsec.char '$' *> (ZeroPage <$> parseWord8)
 
 parseZeroPageX :: Attoparsec.Parser Operand
 parseZeroPageX = do
-  void $ Attoparsec.char '$'
   w8 <- parseWord8
   void $ Attoparsec.string ",x"
   pure $ ZeroPageX w8
 
 parseZeroPageY :: Attoparsec.Parser Operand
 parseZeroPageY = do
-  void $ Attoparsec.char '$'
   w8 <- parseWord8
   void $ Attoparsec.string ",y"
   pure $ ZeroPageY w8
 
 parseAbsolute :: Attoparsec.Parser Operand
 parseAbsolute = do
-  void $ Attoparsec.char '$'
   Absolute
     <$> parseWord8
     <*> parseWord8
 
 parseAbsoluteX :: Attoparsec.Parser Operand
 parseAbsoluteX = do
-  void $ Attoparsec.char '$'
   (ll, hh) <- splitWord16 <$> parseWord16
   void $ Attoparsec.string ",x"
   pure $ AbsoluteX ll hh
 
 parseAbsoluteY :: Attoparsec.Parser Operand
 parseAbsoluteY = do
-  void $ Attoparsec.char '$'
   (ll, hh) <- splitWord16 <$> parseWord16
   void $ Attoparsec.string ",y"
   pure $ AbsoluteY ll hh
 
 parseIndirect :: Attoparsec.Parser Operand
 parseIndirect = do
-  void $ Attoparsec.string "($"
+  void $ Attoparsec.string "("
   (ll, hh) <- splitWord16 <$> parseWord16
   void $ Attoparsec.char ')'
   pure $ Indirect ll hh

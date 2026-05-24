@@ -77,9 +77,9 @@ instruct sh oprText emulate =
       relevantAddressingModes = InsOrd.toList $ (\ins -> ins.addressingMode) <$> K.filterShorthand sh
 
     K.when env.assembler $ K.do
-      -- LETS FUCKING GOOOOOOOOOOOOOOOOOOOOOOO
       K.log K.Info ("Assembling: " <> K.shorthandText sh <> " " <> oprText)
       K.log K.Test ("Relevant Addressing Modes: " <> T.show relevantAddressingModes)
+      -- LETS FUCKING GOOOOOOOOOOOOOOOOOOOOOOO
       withered <- wither (matchParser oprText) relevantAddressingModes
       case withered of
         [] -> K.do
