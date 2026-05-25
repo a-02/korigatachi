@@ -258,10 +258,10 @@ parseIndirectY = do
   pure $ IndirectX w8
 
 parseRelative :: Attoparsec.Parser Operand
-parseRelative = Attoparsec.char '$' *> (Relative <$> parseWord8)
+parseRelative = (Relative <$> parseWord8)
 
 parseZeroPage :: Attoparsec.Parser Operand
-parseZeroPage = Attoparsec.char '$' *> (ZeroPage <$> parseWord8)
+parseZeroPage = (ZeroPage <$> parseWord8)
 
 parseZeroPageX :: Attoparsec.Parser Operand
 parseZeroPageX = do

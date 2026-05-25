@@ -103,8 +103,12 @@ instruct sh oprText emulate =
 matchParser :: T.Text -> (Word8, T.Text) -> Korigatachi (Maybe (Word8, Operand))
 matchParser oprText (w8, addressingMode) = K.do
   let
-    thing = Attoparsec.eitherResult $ Attoparsec.parse (addressingModeToParser addressingMode) oprText
-  case thing of
+    eitherParsedAddressingMode =
+      Attoparsec.eitherResult $
+        Attoparsec.parse
+          (addressingModeToParser addressingMode)
+          oprText
+  case eitherParsedAddressingMode of
     Left failedParse -> K.do
       K.log
         K.Info

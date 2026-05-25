@@ -1,4 +1,6 @@
 module Main (main) where
 
+import Korigatachi.Test
+
 main :: IO ()
-main = putStrLn "Test suite not yet implemented."
+main = testKorigatachi
