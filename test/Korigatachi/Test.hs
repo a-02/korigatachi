@@ -19,16 +19,16 @@ tests = testGroup "Korigatachi.Test" [parserUnitTests]
 parserUnitTests :: TestTree
 parserUnitTests = testGroup "Parser Unit Tests"
   [ HU.testCase "Parse Immediate Hex" . HU.assertBool "Succeeds on \"#$FF\" as Immediate." .
-      isRight $ Attoparsec.eitherResult (Attoparsec.parse K.parseImmediate "#$FF")
+      isRight $ (Attoparsec.parseOnly K.parseImmediate "#$FF")
   , HU.testCase "Parse Immediate Signed Hex" . HU.assertBool "Succeeds on \"#-$FF\" as Immediate." .
-      isRight $ Attoparsec.eitherResult (Attoparsec.parse K.parseImmediate "#$FF")
+      isRight $ (Attoparsec.parseOnly K.parseImmediate "#$FF")
   , HU.testCase "Parse Immediate Octal" . HU.assertBool "Succeeds on \"#o77\" as Immediate." .
-      isRight $ Attoparsec.eitherResult (Attoparsec.parse K.parseImmediate "#077")
+      isRight $ (Attoparsec.parseOnly K.parseImmediate "#077")
   , HU.testCase "Parse Immediate Binary" . HU.assertBool "Succeeds on \"#%10101010\" as Immediate." .
-      isRight $ Attoparsec.eitherResult (Attoparsec.parse K.parseImmediate "#%10101010")
+      isRight $ (Attoparsec.parseOnly K.parseImmediate "#%10101010")
   , HU.testCase "Parse Immediate Bare Numeral" . HU.assertBool "Fails on \"FFFF\" as Immediate." .
-      isLeft $ Attoparsec.eitherResult (Attoparsec.parse K.parseImmediate "FFFF")
+      isLeft $ (Attoparsec.parseOnly K.parseImmediate "FFFF")
   , HU.testCase "Parse Immediate Missing Hash" . HU.assertBool "Fails on \"$FFFF\" as Immediate." .
-      isLeft $ Attoparsec.eitherResult (Attoparsec.parse K.parseImmediate "$FFFF")
+      isLeft $ (Attoparsec.parseOnly K.parseImmediate "$FFFF")
   
   ]
