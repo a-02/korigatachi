@@ -111,7 +111,8 @@ matchParser oprText (w8, addressingMode) = K.do
     Left failedParse -> K.do
       K.log
         K.Info
-        ( foldl1 (<>)
+        ( foldl1
+            (<>)
             [ "Failed to parse \""
             , oprText
             , "\" as "
