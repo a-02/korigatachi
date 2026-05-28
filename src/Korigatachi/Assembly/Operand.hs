@@ -225,13 +225,13 @@ parseWord16 = signed $
     case baseRep of
       K.Hexadecimal -> do
         nibbles <- reverse <$> Attoparsec.many1' hexDigit
-        pure . getAnd . foldMap And $ zipWith shiftNibble [0 ..] nibbles
+        pure . getIor . foldMap Ior $ zipWith shiftNibble [0 ..] nibbles
       K.Octal -> do
         triades <- reverse <$> Attoparsec.many1' octalDigit
-        pure . getAnd . foldMap And $ zipWith shiftTriade [0 ..] triades
+        pure . getIor . foldMap Ior $ zipWith shiftTriade [0 ..] triades
       K.Binary -> do
         bits <- reverse <$> Attoparsec.many1' binaryDigit
-        pure . getAnd . foldMap And $ zipWith shiftBinary [0 ..] bits
+        pure . getIor . foldMap Ior $ zipWith shiftBinary [0 ..] bits
       K.Decimal -> Attoparsec.decimal
 
 parseAccumulator :: Attoparsec.Parser Operand
@@ -241,7 +241,7 @@ parseImplied :: Attoparsec.Parser Operand
 parseImplied = "" *> pure Implied
 
 parseImmediate :: Attoparsec.Parser Operand
-parseImmediate = "#" *> (Immediate <$> parseWord8)
+parseImmediate = (Attoparsec.char '#') *> (Immediate <$> parseWord8)
 
 parseIndirectX :: Attoparsec.Parser Operand
 parseIndirectX = do

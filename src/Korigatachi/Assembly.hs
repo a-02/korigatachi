@@ -29,9 +29,16 @@ import Optics
 import Witherable (Witherable (wither))
 import Prelude hiding (read)
 
+-- | Assembly instructions are indented to semantically
+-- seperate them from labels and other not-assembly things.
+-- This is hard-coded to two spaces because it looks nice.
 spacing :: T.Text
 spacing = "  "
 
+-- | The start of a valid Atari 2600 asm file.
+-- Korigatachi is meant to not only assemble Atari machine code
+-- itself, but also spit out assembly that is readable by the dasm
+-- 8-bit assembler.
 preamble :: Korigatachi ()
 preamble = K.do
   K.codeGen "  processor 6502"
@@ -123,7 +130,7 @@ matchParser oprText (w8, addressingMode) = K.do
         )
       K.ixpure Nothing
     Right operand -> K.do
-      K.log K.Info ("Parsing " <> oprText <> " succeeded.")
+      K.log K.Info ("Parsing \"" <> oprText <> "\" succeeded.")
       K.ixpure $ Just (w8, operand)
 
 dex :: Korigatachi ()
