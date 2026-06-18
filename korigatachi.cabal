@@ -81,7 +81,6 @@ library
     build-depends:
         attoparsec,
         base,
-        brillo,
         bytestring,
         finite-typelits,
         insert-ordered-containers,

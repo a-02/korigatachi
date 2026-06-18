@@ -27,6 +27,26 @@ parserUnitTests :: TestTree
 parserUnitTests =
   testGroup
     "Parser Unit Tests"
+    [ parserImmediateTests
+    , parseAccumulatorTests
+    ]
+
+parseAccumulatorTests :: TestTree
+parseAccumulatorTests =
+  testGroup
+    "Parse Accumulator"
+    [ HU.testCase "Parse Accumulator" $
+        HU.assertEqual
+          "Succeeds on \"A\" as Accumulator"
+          (Right K.Types.Accumulator)
+          (Attoparsec.parseOnly K.parseAccumulator "A")
+          
+    ]
+
+parserImmediateTests :: TestTree
+parserImmediateTests =
+  testGroup
+    "Parser Immediate"
     [ HU.testCase "Parse Immediate Hex" $
         HU.assertEqual
           "Succeeds on \"#$FF\" as Immediate."
@@ -57,6 +77,8 @@ parserUnitTests =
         $ (Attoparsec.parseOnly K.parseImmediate "$FFFF")
     ]
 
+
+-- | Testing the internals of the parser, absent assembly syntax.
 parserInternalsUnitTests :: TestTree
 parserInternalsUnitTests =
   testGroup

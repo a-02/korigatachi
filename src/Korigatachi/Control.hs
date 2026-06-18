@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QualifiedDo #-}
 
 module Korigatachi.Control where
 
@@ -12,7 +13,7 @@ import Numeric
 import Optics
 
 import Korigatachi.Model
-import Korigatachi.Monad
+import Korigatachi.Monad as K
 import Korigatachi.Types
 
 hex8 :: Getter Word8 String
@@ -28,3 +29,11 @@ when s k = case s of
 
 logErr :: String -> Korigatachi ()
 logErr = flip katteyomi ("") . pack
+
+find :: (a -> Korigatachi (Maybe b)) -> [a] -> Korigatachi (Maybe b)
+find _ [] = ixpure Nothing
+find action (item : rest) =
+  action item K.>>= \m ->
+    case m of
+      Nothing -> find action rest
+      Just found -> ixpure (Just found)

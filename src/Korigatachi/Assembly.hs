@@ -13,32 +13,33 @@
 
 module Korigatachi.Assembly where
 
+import Control.Monad (void)
 import Data.Attoparsec.Text qualified as Attoparsec
 import Data.Bits (Bits ((.&.)))
-import Data.HashMap.Strict.InsOrd qualified as InsOrd
 import Data.Text qualified as T
-import Data.Word (Word16, Word8)
+import Data.Word (Word16)
 import Korigatachi.Assembly.Operand
 import Korigatachi.Assembly.ReadWrite
 import Korigatachi.Control qualified as K
 import Korigatachi.Model qualified as K
 import Korigatachi.Monad qualified as K
-import Korigatachi.Types (Korigatachi, Operand (..), Shorthand (..))
+import Korigatachi.Types (Korigatachi, Operand (..))
 import Korigatachi.Types qualified as K
 import Optics
-import Witherable (Witherable (wither))
 import Prelude hiding (read)
 
--- | Assembly instructions are indented to semantically
--- seperate them from labels and other not-assembly things.
--- This is hard-coded to two spaces because it looks nice.
+{- | Assembly instructions are indented to semantically
+seperate them from labels and other not-assembly things.
+This is hard-coded to two spaces because it looks nice.
+-}
 spacing :: T.Text
 spacing = "  "
 
--- | The start of a valid Atari 2600 asm file.
--- Korigatachi is meant to not only assemble Atari machine code
--- itself, but also spit out assembly that is readable by the dasm
--- 8-bit assembler.
+{- | The start of a valid Atari 2600 asm file.
+Korigatachi is meant to not only assemble Atari machine code
+itself, but also spit out assembly that is readable by the dasm
+8-bit assembler.
+-}
 preamble :: Korigatachi ()
 preamble = K.do
   K.codeGen "  processor 6502"
@@ -71,123 +72,260 @@ word w16 = K.do
   assembleROMInternal hh
   K.codeGen (spacing <> ".word $" <> (T.pack $ w16 ^. K.hex16))
 
--- TODO: This is better? But still misdesigned.
-instruct :: Shorthand -> T.Text -> (Operand -> Korigatachi ()) -> Korigatachi ()
-instruct sh oprText emulate =
-  K.do
-    env <- K.ask
-    let
-      -- To avoid confusion between Relative and Implied addressing modes, we filter
-      -- the possible addressing modes to parse an operand text based on the shorthand.
-      -- We can do this since none of the members of validInstructions have the same shorthand
-      -- but two entries with Relative and Implied addressing respectively.
-      relevantAddressingModes = InsOrd.toList $ (\ins -> ins.addressingMode) <$> K.filterShorthand sh
+adc :: T.Text -> Korigatachi ()
+adc oprText = K.do
+  K.codeGen (spacing <> "adc " <> oprText)
+  case Attoparsec.parseOnly parseOperand oprText of
+    Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
+    Right (Immediate w8) ->
+      void $ traverse assembleROMInternal [0x69, w8]
+    Right (ZeroPage w8) ->
+      void $ traverse assembleROMInternal [0x65, w8]
+    Right (ZeroPageX w8) ->
+      void $ traverse assembleROMInternal [0x75, w8]
+    Right (Absolute ll hh) ->
+      void $ traverse assembleROMInternal [0x6d, ll, hh]
+    Right (AbsoluteX ll hh) ->
+      void $ traverse assembleROMInternal [0x7d, ll, hh]
+    Right (AbsoluteY ll hh) ->
+      void $ traverse assembleROMInternal [0x7d, ll, hh]
+    Right (IndirectX w8) ->
+      void $ traverse assembleROMInternal [0x61, w8]
+    Right (IndirectY w8) ->
+      void $ traverse assembleROMInternal [0x71, w8]
+    _ -> K.log K.Warn ("Invalid operand for ADC: " <> oprText)
 
-    K.when env.assembler $ K.do
-      K.log K.Info ("Assembling: " <> K.shorthandText sh <> " " <> oprText)
-      K.log K.Test ("Relevant Addressing Modes: " <> T.show relevantAddressingModes)
-      -- LETS FUCKING GOOOOOOOOOOOOOOOOOOOOOOO
-      withered <- wither (matchParser oprText) relevantAddressingModes
-      case withered of
-        [] -> K.do
-          K.log K.Warn ("Failed to parse operand: " <> oprText)
-        ((bytecode, opr) : _) -> K.do
-          let
-            instruction = InsOrd.lookupDefault K.jamInstruction bytecode K.validInstructions
-          K.log K.Test ("Parsed operand: " <> T.show opr)
-          K.log K.Test ("Bytecode: " <> T.show bytecode)
-          K.log K.Test ("Instruction: " <> T.show instruction)
+and :: T.Text -> Korigatachi ()
+and oprText = K.do
+  K.codeGen (spacing <> "and " <> oprText)
+  case Attoparsec.parseOnly parseOperand oprText of
+    Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
+    Right (Immediate w8) ->
+      void $ traverse assembleROMInternal [0x29, w8]
+    Right (ZeroPage w8) ->
+      void $ traverse assembleROMInternal [0x25, w8]
+    Right (ZeroPageX w8) ->
+      void $ traverse assembleROMInternal [0x35, w8]
+    Right (Absolute ll hh) ->
+      void $ traverse assembleROMInternal [0x2d, ll, hh]
+    Right (AbsoluteX ll hh) ->
+      void $ traverse assembleROMInternal [0x3d, ll, hh]
+    Right (AbsoluteY ll hh) ->
+      void $ traverse assembleROMInternal [0x39, ll, hh]
+    Right (IndirectX w8) ->
+      void $ traverse assembleROMInternal [0x21, w8]
+    Right (IndirectY w8) ->
+      void $ traverse assembleROMInternal [0x31, w8]
+    _ -> K.log K.Warn ("Invalid operand for AND: " <> oprText)
 
-          K.when env.emulator $ (emulate opr)
-
-          K.when env.display $ K.do
-            advanceTV instruction
-
-          K.codeGen (spacing <> K.shorthandText sh <> " " <> oprText)
-
-          assembleROMInternal instruction.opcode
-
-matchParser :: T.Text -> (Word8, T.Text) -> Korigatachi (Maybe (Word8, Operand))
-matchParser oprText (w8, addressingMode) = K.do
-  let
-    eitherParsedAddressingMode =
-      Attoparsec.parseOnly
-        (addressingModeToParser addressingMode)
-        oprText
-  case eitherParsedAddressingMode of
-    Left failedParse -> K.do
-      K.log
-        K.Info
-        ( foldl1
-            (<>)
-            [ "Failed to parse \""
-            , oprText
-            , "\" as "
-            , addressingMode
-            , ": "
-            , T.pack failedParse
-            ]
-        )
-      K.ixpure Nothing
-    Right operand -> K.do
-      K.log K.Info ("Parsing \"" <> oprText <> "\" succeeded.")
-      K.ixpure $ Just (w8, operand)
-
-dex :: Korigatachi ()
-dex = instruct DEX "" (\_ -> K.ixpure ()) -- TODO: Decrement X by one.
-
-dey :: Korigatachi ()
-dey = instruct DEX "" (\_ -> K.ixpure ()) -- TODO: Decrement Y by one.
+asl :: T.Text -> Korigatachi ()
+asl oprText = K.do
+  K.codeGen (spacing <> "asl " <> oprText)
+  case Attoparsec.parseOnly parseOperand oprText of
+    Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
+    Right Accumulator ->
+      void $ traverse assembleROMInternal [0x0a]
+    Right (ZeroPage w8) ->
+      void $ traverse assembleROMInternal [0x06, w8]
+    Right (ZeroPageX w8) ->
+      void $ traverse assembleROMInternal [0x16, w8]
+    Right (Absolute ll hh) ->
+      void $ traverse assembleROMInternal [0x0e, ll, hh]
+    Right (AbsoluteX ll hh) ->
+      void $ traverse assembleROMInternal [0x1e, ll, hh]
+    _ -> K.log K.Warn ("Invalid operand for ASL: " <> oprText)
 
 bne :: T.Text -> Korigatachi ()
-bne oprText = instruct BNE oprText (\_ -> K.ixpure ()) -- TODO: Break if non zero.
-
-jmp :: T.Text -> Korigatachi ()
-jmp oprText = instruct JMP oprText (\_ -> K.ixpure ()) -- TODO: Jump to instruction.
+bne oprText = K.do
+  K.codeGen (spacing <> "bne " <> oprText)
+  case Attoparsec.parseOnly parseOperand oprText of
+    Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
+    Right (Relative w8) ->
+      void $ traverse assembleROMInternal [0xD0, w8]
+    _ -> K.log K.Warn ("Invalid operand for BNE: " <> oprText)
 
 cld :: Korigatachi ()
-cld = instruct CLD "" (\_ -> clearFlags 0b000010000)
+cld = K.do
+  K.codeGen (spacing <> "cld")
+  assembleROMInternal 0xD8
+
+dex :: Korigatachi ()
+dex = K.do
+  K.codeGen (spacing <> "dex")
+  assembleROMInternal 0xCA
+
+dey :: Korigatachi ()
+dey = K.do
+  K.codeGen (spacing <> "dey")
+  assembleROMInternal 0x88
+
+jmp :: T.Text -> Korigatachi ()
+jmp oprText = K.do
+  K.codeGen (spacing <> "JMP " <> oprText)
+  case Attoparsec.parseOnly parseOperand oprText of
+    Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
+    Right (Absolute ll hh) ->
+      void $ traverse assembleROMInternal [0x4C, ll, hh]
+    Right (Indirect ll hh) ->
+      void $ traverse assembleROMInternal [0x6C, ll, hh]
+    _ -> K.log K.Warn ("Invalid operand for JMP: " <> oprText)
 
 lda :: T.Text -> Korigatachi ()
-lda oprText = instruct LDA oprText $ \opr -> K.do
-  val <- readOpr opr
-  K.modify $ #cpu % #generalRegisters % #a .~ val
+lda oprText = K.do
+  K.codeGen (spacing <> "lda " <> oprText)
+  case Attoparsec.parseOnly parseOperand oprText of
+    Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
+    Right (Immediate w8) ->
+      void $ traverse assembleROMInternal [0xA9, w8]
+    Right (ZeroPage w8) ->
+      void $ traverse assembleROMInternal [0xA5, w8]
+    Right (ZeroPageX w8) ->
+      void $ traverse assembleROMInternal [0xB5, w8]
+    Right (Absolute ll hh) ->
+      void $ traverse assembleROMInternal [0xAD, ll, hh]
+    Right (AbsoluteX ll hh) ->
+      void $ traverse assembleROMInternal [0xBD, ll, hh]
+    Right (AbsoluteY ll hh) ->
+      void $ traverse assembleROMInternal [0xB9, ll, hh]
+    Right (IndirectX w8) ->
+      void $ traverse assembleROMInternal [0xA1, w8]
+    Right (IndirectY w8) ->
+      void $ traverse assembleROMInternal [0xB1, w8]
+    _ -> K.log K.Warn ("Invalid operand for LDA: " <> oprText)
+
+-- lda oprText = instruct LDA oprText $ \opr -> K.do
+--   val <- readOpr opr
+--   K.modify $ #cpu % #generalRegisters % #a .~ val
 
 ldx :: T.Text -> Korigatachi ()
-ldx oprText = instruct LDX oprText $ \opr -> K.do
-  val <- readOpr opr
-  K.modify $ #cpu % #generalRegisters % #x .~ val
+ldx oprText = K.do
+  K.codeGen (spacing <> "ldx " <> oprText)
+  case Attoparsec.parseOnly parseOperand oprText of
+    Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
+    Right (Immediate w8) ->
+      void $ traverse assembleROMInternal [0xA2, w8]
+    Right (ZeroPage w8) ->
+      void $ traverse assembleROMInternal [0xA6, w8]
+    Right (ZeroPageY w8) ->
+      void $ traverse assembleROMInternal [0xB6, w8]
+    Right (Absolute ll hh) ->
+      void $ traverse assembleROMInternal [0xAE, ll, hh]
+    Right (AbsoluteY ll hh) ->
+      void $ traverse assembleROMInternal [0xBE, ll, hh]
+    _ -> K.log K.Warn ("Invalid operand for LDX: " <> oprText)
 
 ldy :: T.Text -> Korigatachi ()
-ldy oprText = instruct LDY oprText $ \opr -> K.do
-  val <- readOpr opr
-  K.modify $ #cpu % #generalRegisters % #y .~ val
+ldy oprText = K.do
+  K.codeGen (spacing <> "ldy " <> oprText)
+  case Attoparsec.parseOnly parseOperand oprText of
+    Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
+    Right (Immediate w8) ->
+      void $ traverse assembleROMInternal [0xA0, w8]
+    Right (ZeroPage w8) ->
+      void $ traverse assembleROMInternal [0xA4, w8]
+    Right (ZeroPageX w8) ->
+      void $ traverse assembleROMInternal [0xB4, w8]
+    Right (Absolute ll hh) ->
+      void $ traverse assembleROMInternal [0xAC, ll, hh]
+    Right (AbsoluteX ll hh) ->
+      void $ traverse assembleROMInternal [0xBC, ll, hh]
+    _ -> K.log K.Warn ("Invalid operand for LDY: " <> oprText)
 
 sei :: Korigatachi ()
-sei = instruct SEI "" (\_ -> setFlags 0b00000100)
+sei = K.do
+  K.codeGen (spacing <> "sei")
+  assembleROMInternal 0x78
+
+-- sei :: Korigatachi ()
+-- sei = instruct SEI "" (\_ -> setFlags 0b00000100)
 
 sta :: T.Text -> Korigatachi ()
-sta oprText = instruct STA oprText $ \opr ->
-  K.do
-    atari <- K.get
-    write atari.cpu.generalRegisters.a opr
+sta oprText = K.do
+  K.codeGen (spacing <> "sta " <> oprText)
+  case Attoparsec.parseOnly parseOperand oprText of
+    Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
+    Right (ZeroPage w8) ->
+      void $ traverse assembleROMInternal [0x85, w8]
+    Right (ZeroPageX w8) ->
+      void $ traverse assembleROMInternal [0x95, w8]
+    Right (Absolute ll hh) ->
+      void $ traverse assembleROMInternal [0x8D, ll, hh]
+    Right (AbsoluteX ll hh) ->
+      void $ traverse assembleROMInternal [0x9D, ll, hh]
+    Right (AbsoluteY ll hh) ->
+      void $ traverse assembleROMInternal [0x99, ll, hh]
+    Right (IndirectX w8) ->
+      void $ traverse assembleROMInternal [0x81, w8]
+    Right (IndirectY w8) ->
+      void $ traverse assembleROMInternal [0x91, w8]
+    _ -> K.log K.Warn ("Invalid operand for STA: " <> oprText)
+
+-- sta :: T.Text -> Korigatachi ()
+-- sta oprText = instruct STA oprText $ \opr ->
+--   K.do
+--     atari <- K.get
+--     write atari.cpu.generalRegisters.a opr
 
 stx :: T.Text -> Korigatachi ()
-stx oprText = instruct STX oprText $ \opr ->
-  K.do
-    atari <- K.get
-    write atari.cpu.generalRegisters.x opr
+stx oprText = K.do
+  K.codeGen (spacing <> "stx " <> oprText)
+  case Attoparsec.parseOnly parseOperand oprText of
+    Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
+    Right (ZeroPage w8) ->
+      void $ traverse assembleROMInternal [0x86, w8]
+    Right (ZeroPageY w8) ->
+      void $ traverse assembleROMInternal [0x96, w8]
+    Right (Absolute ll hh) ->
+      void $ traverse assembleROMInternal [0x8E, ll, hh]
+    _ -> K.log K.Warn ("Invalid operand for stX: " <> oprText)
 
 sty :: T.Text -> Korigatachi ()
-sty oprText = instruct STX oprText $ \opr ->
-  K.do
-    atari <- K.get
-    write atari.cpu.generalRegisters.y opr
+sty oprText = K.do
+  K.codeGen (spacing <> "sty " <> oprText)
+  case Attoparsec.parseOnly parseOperand oprText of
+    Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
+    Right (ZeroPage w8) ->
+      void $ traverse assembleROMInternal [0x84, w8]
+    Right (ZeroPageX w8) ->
+      void $ traverse assembleROMInternal [0x94, w8]
+    Right (Absolute ll hh) ->
+      void $ traverse assembleROMInternal [0x8C, ll, hh]
+    _ -> K.log K.Warn ("Invalid operand for stY: " <> oprText)
+
+tax :: Korigatachi ()
+tax = K.do
+  K.codeGen (spacing <> "tax")
+  assembleROMInternal 0xaa
+
+tay :: Korigatachi ()
+tay = K.do
+  K.codeGen (spacing <> "tay")
+  assembleROMInternal 0xa8
+
+tsx :: Korigatachi ()
+tsx = K.do
+  K.codeGen (spacing <> "tsx")
+  assembleROMInternal 0xBA
+
+txa :: Korigatachi ()
+txa = K.do
+  K.codeGen (spacing <> "txa")
+  assembleROMInternal 0x8a
 
 txs :: Korigatachi ()
-txs = instruct TXS "" $ \_ ->
-  K.modify $
-    \atari -> atari & #cpu % #stackPointer .~ (atari ^. #cpu % #generalRegisters % #x)
+txs = K.do
+  K.codeGen (spacing <> "txs")
+  assembleROMInternal 0x9a
+
+tya :: Korigatachi ()
+tya = K.do
+  K.codeGen (spacing <> "tya")
+  assembleROMInternal 0x98
+
+-- txs :: Korigatachi ()
+-- txs = instruct TXS "" $ \_ ->
+--   K.modify $
+--     \atari -> atari & #cpu % #stackPointer .~ (atari ^. #cpu % #generalRegisters % #x)
 
 advanceTV :: K.Instruction -> Korigatachi ()
 advanceTV ins =

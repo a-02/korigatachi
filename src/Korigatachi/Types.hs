@@ -68,9 +68,10 @@ data Atari = Atari
   , tia :: TIA
   -- ^ Television Interface Adapter.
   , pia :: PIA
-  -- ^ Off-the-shelf 6532 Peripheral Interface Adapter.
-  --   Technically, the RAM is controlled by this chip, but
-  --   it's easier to abstract the RAM to a seperate field.
+  {- ^ Off-the-shelf 6532 Peripheral Interface Adapter.
+  Technically, the RAM is controlled by this chip, but
+  it's easier to abstract the RAM to a seperate field.
+  -}
   }
   deriving (Generic.Generic)
 
@@ -450,8 +451,9 @@ data TV = TV
   , line :: Int
   -- ^ vertical position, 0-261 for NTSC.
   , hPos :: Int
-  -- ^ horizontal position, 68 "pixels" of hblank, 160 pixels of color
-  --   one cpu cycle is 3 "pixels", so we get 76 cycles per line. This is 0-indexed.
+  {- ^ horizontal position, 68 "pixels" of hblank, 160 pixels of color
+  one cpu cycle is 3 "pixels", so we get 76 cycles per line. This is 0-indexed.
+  -}
   , region :: Region
   }
   deriving (Generic.Generic)
