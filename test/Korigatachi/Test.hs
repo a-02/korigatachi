@@ -53,7 +53,7 @@ parseImpliedTests :: TestTree
 parseImpliedTests =
   testGroup
     "Parse Implied"
-    [ HU.testCase "Parse Implied" $
+    [ HU.testCase "Parse Implied Base Case" $
         HU.assertEqual
           "Succeeds on \"\" as Implied"
           (Right K.Types.Implied)
@@ -160,7 +160,7 @@ parseRelativeTests :: TestTree
 parseRelativeTests =
   testGroup
     "Parse Relative"
-    [ HU.testCase "Parse Relative" $
+    [ HU.testCase "Parse Relative Base Case" $
         HU.assertEqual
           "Succeeds on \"$02\" as Relative"
           (Right $ K.Types.Relative 2)
@@ -171,7 +171,7 @@ parseZeroPageTests :: TestTree
 parseZeroPageTests =
   testGroup
     "Parse ZeroPage"
-    [ HU.testCase "Parse ZeroPage" $
+    [ HU.testCase "Parse ZeroPage Base Case" $
         HU.assertEqual
           "Succeeds on \"$02\" as ZeroPage"
           (Right $ K.Types.ZeroPage 2)
@@ -182,7 +182,7 @@ parseZeroPageXTests :: TestTree
 parseZeroPageXTests =
   testGroup
     "Parse ZeroPageX"
-    [ HU.testCase "Parse ZeroPageX" $
+    [ HU.testCase "Parse ZeroPageX Base Case" $
         HU.assertEqual
           "Succeeds on \"$02,x\" as ZeroPageX"
           (Right $ K.Types.ZeroPageX 2)
@@ -198,7 +198,7 @@ parseZeroPageYTests :: TestTree
 parseZeroPageYTests =
   testGroup
     "Parse ZeroPageY"
-    [ HU.testCase "Parse ZeroPageY" $
+    [ HU.testCase "Parse ZeroPageY Base Case" $
         HU.assertEqual
           "Succeeds on \"$02,y\" as ZeroPageY"
           (Right $ K.Types.ZeroPageY 2)
