@@ -258,7 +258,7 @@ sta oprText = K.do
       void $ traverse assembleROMInternal [0x81, w8]
     Right (IndirectY w8) ->
       void $ traverse assembleROMInternal [0x91, w8]
-    _ -> K.log K.Warn ("Invalid operand for STA: " <> oprText)
+    opr -> K.log K.Warn ("Invalid operand for STA: " <> oprText <> " " <> (T.show opr))
 
 -- sta :: T.Text -> Korigatachi ()
 -- sta oprText = instruct STA oprText $ \opr ->

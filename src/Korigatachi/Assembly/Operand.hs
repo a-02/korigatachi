@@ -227,15 +227,19 @@ parseWord16 = signed $
         nibbles <- reverse <$> Attoparsec.many1' hexDigit
         pure . getIor . foldMap Ior $ zipWith shiftNibble [0 ..] nibbles
       K.Octal -> do
-        triades <- reverse <$> Attoparsec.many1' octalDigit
-        pure . getIor . foldMap Ior $ zipWith shiftTriade [0 ..] triades
+        triades <- reverse <$> Attoparsec.many' octalDigit
+        if null triades
+          then
+            pure 0 -- Gets around a single "0" being parsed as the start of an octal instead of the number zero.
+          else
+            pure . getIor . foldMap Ior $ zipWith shiftTriade [0 ..] triades
       K.Binary -> do
         bits <- reverse <$> Attoparsec.many1' binaryDigit
         pure . getIor . foldMap Ior $ zipWith shiftBinary [0 ..] bits
       K.Decimal -> Attoparsec.decimal
 
 parseAccumulator :: Attoparsec.Parser Operand
-parseAccumulator = "A" *> pure Accumulator -- You almost never need to do this.
+parseAccumulator = (Attoparsec.char 'A') *> pure Accumulator -- You almost never need to do this.
 
 parseImplied :: Attoparsec.Parser Operand
 parseImplied = "" *> pure Implied
@@ -245,17 +249,17 @@ parseImmediate = (Attoparsec.char '#') *> (Immediate <$> parseWord8)
 
 parseIndirectX :: Attoparsec.Parser Operand
 parseIndirectX = do
-  void $ Attoparsec.string "($"
+  void $ Attoparsec.string "("
   w8 <- parseWord8
-  void $ Attoparsec.string ",x)"
+  void $ (Attoparsec.string ",x)" <|> Attoparsec.string ",X)")
   pure $ IndirectX w8
 
 parseIndirectY :: Attoparsec.Parser Operand
 parseIndirectY = do
-  void $ Attoparsec.string "($"
+  void $ Attoparsec.string "("
   w8 <- parseWord8
-  void $ Attoparsec.string "),y"
-  pure $ IndirectX w8
+  void $ (Attoparsec.string "),y" <|> Attoparsec.string "),Y")
+  pure $ IndirectY w8
 
 parseRelative :: Attoparsec.Parser Operand
 parseRelative = (Relative <$> parseWord8)
@@ -266,13 +270,13 @@ parseZeroPage = (ZeroPage <$> parseWord8)
 parseZeroPageX :: Attoparsec.Parser Operand
 parseZeroPageX = do
   w8 <- parseWord8
-  void $ Attoparsec.string ",x"
+  void $ (Attoparsec.string ",x" <|> Attoparsec.string ",X")
   pure $ ZeroPageX w8
 
 parseZeroPageY :: Attoparsec.Parser Operand
 parseZeroPageY = do
   w8 <- parseWord8
-  void $ Attoparsec.string ",y"
+  void $ (Attoparsec.string ",y" <|> Attoparsec.string ",Y")
   pure $ ZeroPageY w8
 
 parseAbsolute :: Attoparsec.Parser Operand
@@ -303,18 +307,18 @@ parseIndirect = do
 parseOperand :: Attoparsec.Parser Operand
 parseOperand =
   parseImmediate
-    <|> parseAccumulator
-    <|> parseImplied
-    <|> parseIndirectX
-    <|> parseIndirectY
-    <|> parseRelative
     <|> parseZeroPage
     <|> parseZeroPageX
     <|> parseZeroPageY
+    <|> parseIndirectX
+    <|> parseIndirectY
     <|> parseAbsolute
     <|> parseAbsoluteX
     <|> parseAbsoluteY
     <|> parseIndirect
+    <|> parseRelative
+    <|> parseImplied
+    <|> parseAccumulator
 
 addressingModeToParser :: T.Text -> Attoparsec.Parser Operand
 addressingModeToParser "Accumulator" = parseAccumulator

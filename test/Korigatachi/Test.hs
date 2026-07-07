@@ -27,8 +27,15 @@ parserUnitTests :: TestTree
 parserUnitTests =
   testGroup
     "Parser Unit Tests"
-    [ parserImmediateTests
+    [ parseImmediateTests
     , parseAccumulatorTests
+    , parseImpliedTests
+    , parseIndirectXTests
+    , parseIndirectYTests
+    , parseRelativeTests
+    , parseZeroPageTests
+    , parseZeroPageXTests
+    , parseZeroPageYTests
     ]
 
 parseAccumulatorTests :: TestTree
@@ -39,14 +46,26 @@ parseAccumulatorTests =
         HU.assertEqual
           "Succeeds on \"A\" as Accumulator"
           (Right K.Types.Accumulator)
-          (Attoparsec.parseOnly K.parseAccumulator "A")
+          (Attoparsec.parseOnly K.parseAccumulator "A")     
+    ]
+
+parseImpliedTests :: TestTree
+parseImpliedTests =
+  testGroup
+    "Parse Implied"
+    [ HU.testCase "Parse Implied" $
+        HU.assertEqual
+          "Succeeds on \"\" as Implied"
+          (Right K.Types.Implied)
+          (Attoparsec.parseOnly K.parseImplied "")
           
     ]
 
-parserImmediateTests :: TestTree
-parserImmediateTests =
+
+parseImmediateTests :: TestTree
+parseImmediateTests =
   testGroup
-    "Parser Immediate"
+    "Parse Immediate"
     [ HU.testCase "Parse Immediate Hex" $
         HU.assertEqual
           "Succeeds on \"#$FF\" as Immediate."
@@ -75,6 +94,120 @@ parserImmediateTests =
         . HU.assertBool "Fails on \"$FFFF\" as Immediate."
         . isLeft
         $ (Attoparsec.parseOnly K.parseImmediate "$FFFF")
+    ]
+
+parseIndirectXTests :: TestTree
+parseIndirectXTests =
+  testGroup
+    "Parser IndirectX"
+    [ HU.testCase "Parse IndirectX Hex" $
+        HU.assertEqual
+          "Succeeds on \"($FF,x)\" as IndirectX."
+          (Right $ K.Types.IndirectX 255)
+          (Attoparsec.parseOnly K.parseIndirectX "($FF,x)")
+    , HU.testCase "Parse IndirectX Signed Hex" $
+        HU.assertEqual
+          "Succeeds on \"(-$FF,x)\" as IndirectX."
+          (Right $ K.Types.IndirectX 1)
+          (Attoparsec.parseOnly K.parseIndirectX "(-$FF,x)")
+    , HU.testCase "Parse IndirectX Octal" $
+        HU.assertEqual
+          "Succeeds on \"(077,x)\" as IndirectX."
+          (Right $ K.Types.IndirectX 63)
+          (Attoparsec.parseOnly K.parseIndirectX "(077,x)")
+    , HU.testCase "Parse IndirectX Binary" $
+        HU.assertEqual
+          "Succeeds on \"(%10101010,x)\" as IndirectX."
+          (Right $ K.Types.IndirectX 170)
+          (Attoparsec.parseOnly K.parseIndirectX "(%10101010,x)")
+    , HU.testCase "Fail Parse IndirectX Bare Numeral"
+        . HU.assertBool "Fails on \"FFFF,x\" as IndirectX."
+        . isLeft
+        $ (Attoparsec.parseOnly K.parseIndirectX "FFFF,x")
+    ]
+    
+parseIndirectYTests :: TestTree
+parseIndirectYTests =
+  testGroup
+    "Parser IndirectY"
+    [ HU.testCase "Parse IndirectY Hex" $
+        HU.assertEqual
+          "Succeeds on \"($FF),y\" as IndirectY."
+          (Right $ K.Types.IndirectY 255)
+          (Attoparsec.parseOnly K.parseIndirectY "($FF),y")
+    , HU.testCase "Parse IndirectY Signed Hex" $
+        HU.assertEqual
+          "Succeeds on \"(-$FF),y\" as IndirectY."
+          (Right $ K.Types.IndirectY 1)
+          (Attoparsec.parseOnly K.parseIndirectY "(-$FF),y")
+    , HU.testCase "Parse IndirectY Octal" $
+        HU.assertEqual
+          "Succeeds on \"(077),y\" as IndirectY."
+          (Right $ K.Types.IndirectY 63)
+          (Attoparsec.parseOnly K.parseIndirectY "(077),y")
+    , HU.testCase "Parse IndirectY Binary" $
+        HU.assertEqual
+          "Succeeds on \"(%10101010),y\" as IndirectY."
+          (Right $ K.Types.IndirectY 170)
+          (Attoparsec.parseOnly K.parseIndirectY "(%10101010),y")
+    , HU.testCase "Fail Parse IndirectY Wrong Register"
+        . HU.assertBool "Fails on \"($FFFF),x\" as IndirectY."
+        . isLeft
+        $ (Attoparsec.parseOnly K.parseIndirectY "($FFFF),x")
+    ]
+
+parseRelativeTests :: TestTree
+parseRelativeTests =
+  testGroup
+    "Parse Relative"
+    [ HU.testCase "Parse Relative" $
+        HU.assertEqual
+          "Succeeds on \"$02\" as Relative"
+          (Right $ K.Types.Relative 2)
+          (Attoparsec.parseOnly K.parseRelative "$02")
+    ]
+
+parseZeroPageTests :: TestTree
+parseZeroPageTests =
+  testGroup
+    "Parse ZeroPage"
+    [ HU.testCase "Parse ZeroPage" $
+        HU.assertEqual
+          "Succeeds on \"$02\" as ZeroPage"
+          (Right $ K.Types.ZeroPage 2)
+          (Attoparsec.parseOnly K.parseZeroPage "$02")
+    ]
+
+parseZeroPageXTests :: TestTree
+parseZeroPageXTests =
+  testGroup
+    "Parse ZeroPageX"
+    [ HU.testCase "Parse ZeroPageX" $
+        HU.assertEqual
+          "Succeeds on \"$02,x\" as ZeroPageX"
+          (Right $ K.Types.ZeroPageX 2)
+          (Attoparsec.parseOnly K.parseZeroPageX "$02,x")
+    , HU.testCase "Parse ZeroPageX Capitalized" $
+        HU.assertEqual
+          "Succeeds on \"$03,X\" as ZeroPageX"
+          (Right $ K.Types.ZeroPageX 3)
+          (Attoparsec.parseOnly K.parseZeroPageX "$03,X")
+    ]
+
+parseZeroPageYTests :: TestTree
+parseZeroPageYTests =
+  testGroup
+    "Parse ZeroPageY"
+    [ HU.testCase "Parse ZeroPageY" $
+        HU.assertEqual
+          "Succeeds on \"$02,y\" as ZeroPageY"
+          (Right $ K.Types.ZeroPageY 2)
+          (Attoparsec.parseOnly K.parseZeroPageY "$02,y")
+    , HU.testCase "Parse ZeroPageY Capitalized" $
+        HU.assertEqual
+          "Succeeds on \"$03,Y\" as ZeroPageY"
+          (Right $ K.Types.ZeroPageY 3)
+          (Attoparsec.parseOnly K.parseZeroPageY "$03,Y")
     ]
 
 
@@ -123,4 +256,9 @@ parserInternalsUnitTests =
           "Parses \"%10101010\" to 170 :: Word8"
           (Right 170)
           (Attoparsec.parseOnly K.parseWord8 "%10101010")
+    , HU.testCase "Parse Word8 Zero" $
+        HU.assertEqual
+          "Parses \"0\" to 0 :: Word8"
+          (Right 0)
+          (Attoparsec.parseOnly K.parseWord8 "0")
     ]
