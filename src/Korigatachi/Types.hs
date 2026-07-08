@@ -479,7 +479,10 @@ data Memory4K = Memory4K
   }
   deriving (Generic.Generic)
 
-data MemoryLabel = MemoryLabel T.Text Word16
+data MemoryLabel = MemoryLabel
+  { labelText :: T.Text
+  , labelByte :: Word16
+  }
 
 data BaseRepresentation = Binary | Octal | Decimal | Hexadecimal
   deriving (Eq, Ord)

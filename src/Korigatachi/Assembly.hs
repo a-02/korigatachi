@@ -26,7 +26,7 @@ import Korigatachi.Monad qualified as K
 import Korigatachi.Types (Korigatachi, Operand (..))
 import Korigatachi.Types qualified as K
 import Optics
-import Prelude hiding (read)
+import Prelude hiding (read, and)
 
 {- | Assembly instructions are indented to semantically
 seperate them from labels and other not-assembly things.
@@ -53,6 +53,16 @@ label labelText = K.do
   labelByte <- K.query $ \a -> a.rom.focus
   K.modify $ #rom % #labels %~ (\ls -> K.MemoryLabel labelText labelByte : ls)
   K.codeGen labelText
+
+resolveLabel :: T.Text -> Korigatachi T.Text
+resolveLabel labelText = K.do
+  atari <- K.get 
+  let
+    labels = atari.rom.labels
+    shortCircuitFilter _ _ [] = 0
+    shortCircuitFilter f predicate (x:xs) =
+      if predicate x then f x else shortCircuitFilter f predicate xs
+  pure . T.show $ shortCircuitFilter K.labelByte (\(K.MemoryLabel memoryLabel _) -> memoryLabel == labelText) labels
 
 {- | Move where the assembler writes bytes to.
 org 0xFFFC will place the "focus" at the 2nd to last byte
@@ -93,6 +103,9 @@ adc oprText = K.do
       void $ traverse assembleROMInternal [0x61, w8]
     Right (IndirectY w8) ->
       void $ traverse assembleROMInternal [0x71, w8]
+    Right (Label text) -> K.do
+      res <- resolveLabel text
+      adc res
     _ -> K.log K.Warn ("Invalid operand for ADC: " <> oprText)
 
 and :: T.Text -> Korigatachi ()
@@ -116,6 +129,9 @@ and oprText = K.do
       void $ traverse assembleROMInternal [0x21, w8]
     Right (IndirectY w8) ->
       void $ traverse assembleROMInternal [0x31, w8]
+    Right (Label text) -> K.do
+      res <- resolveLabel text
+      and res
     _ -> K.log K.Warn ("Invalid operand for AND: " <> oprText)
 
 asl :: T.Text -> Korigatachi ()
@@ -133,6 +149,9 @@ asl oprText = K.do
       void $ traverse assembleROMInternal [0x0e, ll, hh]
     Right (AbsoluteX ll hh) ->
       void $ traverse assembleROMInternal [0x1e, ll, hh]
+    Right (Label text) -> K.do
+      res <- resolveLabel text
+      asl res
     _ -> K.log K.Warn ("Invalid operand for ASL: " <> oprText)
 
 bne :: T.Text -> Korigatachi ()
@@ -142,6 +161,9 @@ bne oprText = K.do
     Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
     Right (Relative w8) ->
       void $ traverse assembleROMInternal [0xD0, w8]
+    Right (Label text) -> K.do -- i hate this operand bullshit
+      res <- resolveLabel text
+      bne res
     _ -> K.log K.Warn ("Invalid operand for BNE: " <> oprText)
 
 cld :: Korigatachi ()

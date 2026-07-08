@@ -281,9 +281,8 @@ parseZeroPageY = do
 
 parseAbsolute :: Attoparsec.Parser Operand
 parseAbsolute = do
-  Absolute
-    <$> parseWord8
-    <*> parseWord8
+  (ll, hh) <- splitWord16 <$> parseWord16
+  pure $ Absolute ll hh
 
 parseAbsoluteX :: Attoparsec.Parser Operand
 parseAbsoluteX = do
