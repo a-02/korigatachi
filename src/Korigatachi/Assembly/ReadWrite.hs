@@ -9,15 +9,11 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QualifiedDo #-}
 
-{- HLINT ignore "Use $>" -}
-
 module Korigatachi.Assembly.ReadWrite where
 
 -- base
 import Data.Bits
 import Data.Word (Word16, Word8)
-
--- insert-ordered-containers
 
 -- optics
 import Optics
@@ -47,8 +43,8 @@ writeRAMInternal w8 memoryAddress = K.do
       K.put (atari & #ram .~ mem)
 
 -- | Assemble ROM incrementally.
-assembleROMInternal :: Word8 -> Korigatachi ()
-assembleROMInternal w8 = K.do
+assembleROM :: Word8 -> Korigatachi ()
+assembleROM w8 = K.do
   atari <- K.get
   case K.updateRom atari.rom w8 of
     Left err -> K.katteyomi err ""
@@ -221,42 +217,6 @@ writePIA val oprW16 =
     0x296 -> K.modify $ #pia % #tim64t .~ val
     0x297 -> K.modify $ #pia % #t1024t .~ val
     _ -> K.katteyomi ("Attempted to write to invalid PIA register: " <> T.pack (oprW16 ^. K.hex16)) ""
-
-{- | Writing to ROM doesn't follow addressing mode specificities since its not an action
-undertaken by the Atari itself, rather us creating a binary. All we care are how many bytes
-written to ROM.
--}
-assembleROM :: Operand -> Korigatachi ()
-assembleROM = \case
-  Accumulator -> K.ixpure ()
-  Implied -> K.ixpure ()
-  Immediate w8 -> assembleROMInternal w8
-  IndirectX w8 -> assembleROMInternal w8
-  IndirectY w8 -> assembleROMInternal w8
-  Relative w8 -> assembleROMInternal w8
-  ZeroPage w8 -> assembleROMInternal w8
-  ZeroPageX w8 -> assembleROMInternal w8
-  ZeroPageY w8 -> assembleROMInternal w8
-  Absolute ll hh ->
-    K.do
-      assembleROMInternal ll
-      assembleROMInternal hh
-  AbsoluteX ll hh ->
-    K.do
-      assembleROMInternal ll
-      assembleROMInternal hh
-  AbsoluteY ll hh ->
-    K.do
-      assembleROMInternal ll
-      assembleROMInternal hh
-  Indirect ll hh ->
-    -- Did you know? The only instruction the 6507 (nee 6502) that uses
-    -- indirect addressing is JMP ($6C).
-    -- I just thought that was interesting.
-    K.do
-      assembleROMInternal ll
-      assembleROMInternal hh
-  Label err -> K.katteyomi err "" -- TODO: Resolve this label.
 
 -- Once I figure out how to write sequence_ for indexed monads, I'll write this.
 -- burns :: [Word8] -> Korigatachi ()

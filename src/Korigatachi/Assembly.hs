@@ -13,6 +13,7 @@
 
 module Korigatachi.Assembly where
 
+import Control.Applicative
 import Control.Monad (void)
 import Data.Attoparsec.Text qualified as Attoparsec
 import Data.Bits (Bits ((.&.)))
@@ -78,31 +79,42 @@ word :: Word16 -> Korigatachi ()
 word w16 = K.do
   let
     (ll, hh) = splitWord16 w16
-  assembleROMInternal ll
-  assembleROMInternal hh
+  assembleROM ll
+  assembleROM hh
   K.codeGen (spacing <> ".word $" <> (T.pack $ w16 ^. K.hex16))
 
 adc :: T.Text -> Korigatachi ()
 adc oprText = K.do
   K.codeGen (spacing <> "adc " <> oprText)
-  case Attoparsec.parseOnly parseOperand oprText of
+  let
+    parseASL =
+      parseImmediate <|>
+      parseZeroPage <|>
+      parseZeroPageX <|>
+      parseAbsolute <|>
+      parseAbsoluteX <|>
+      parseAbsoluteY <|>
+      parseIndirectX <|>
+      parseIndirectY <|>
+      parseLabel
+  case Attoparsec.parseOnly parseASL oprText of
     Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
     Right (Immediate w8) ->
-      void $ traverse assembleROMInternal [0x69, w8]
+      void $ traverse assembleROM [0x69, w8]
     Right (ZeroPage w8) ->
-      void $ traverse assembleROMInternal [0x65, w8]
+      void $ traverse assembleROM [0x65, w8]
     Right (ZeroPageX w8) ->
-      void $ traverse assembleROMInternal [0x75, w8]
+      void $ traverse assembleROM [0x75, w8]
     Right (Absolute ll hh) ->
-      void $ traverse assembleROMInternal [0x6d, ll, hh]
+      void $ traverse assembleROM [0x6d, ll, hh]
     Right (AbsoluteX ll hh) ->
-      void $ traverse assembleROMInternal [0x7d, ll, hh]
+      void $ traverse assembleROM [0x7d, ll, hh]
     Right (AbsoluteY ll hh) ->
-      void $ traverse assembleROMInternal [0x7d, ll, hh]
+      void $ traverse assembleROM [0x7d, ll, hh]
     Right (IndirectX w8) ->
-      void $ traverse assembleROMInternal [0x61, w8]
+      void $ traverse assembleROM [0x61, w8]
     Right (IndirectY w8) ->
-      void $ traverse assembleROMInternal [0x71, w8]
+      void $ traverse assembleROM [0x71, w8]
     Right (Label text) -> K.do
       res <- resolveLabel text
       adc res
@@ -111,24 +123,35 @@ adc oprText = K.do
 and :: T.Text -> Korigatachi ()
 and oprText = K.do
   K.codeGen (spacing <> "and " <> oprText)
-  case Attoparsec.parseOnly parseOperand oprText of
+  let
+    parseAND =
+      parseImmediate <|>
+      parseZeroPage <|>
+      parseZeroPageX <|>
+      parseAbsolute <|>
+      parseAbsoluteX <|>
+      parseAbsoluteY <|>
+      parseIndirectX <|>
+      parseIndirectY <|>
+      parseLabel
+  case Attoparsec.parseOnly parseAND oprText of
     Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
     Right (Immediate w8) ->
-      void $ traverse assembleROMInternal [0x29, w8]
+      void $ traverse assembleROM [0x29, w8]
     Right (ZeroPage w8) ->
-      void $ traverse assembleROMInternal [0x25, w8]
+      void $ traverse assembleROM [0x25, w8]
     Right (ZeroPageX w8) ->
-      void $ traverse assembleROMInternal [0x35, w8]
+      void $ traverse assembleROM [0x35, w8]
     Right (Absolute ll hh) ->
-      void $ traverse assembleROMInternal [0x2d, ll, hh]
+      void $ traverse assembleROM [0x2d, ll, hh]
     Right (AbsoluteX ll hh) ->
-      void $ traverse assembleROMInternal [0x3d, ll, hh]
+      void $ traverse assembleROM [0x3d, ll, hh]
     Right (AbsoluteY ll hh) ->
-      void $ traverse assembleROMInternal [0x39, ll, hh]
+      void $ traverse assembleROM [0x39, ll, hh]
     Right (IndirectX w8) ->
-      void $ traverse assembleROMInternal [0x21, w8]
+      void $ traverse assembleROM [0x21, w8]
     Right (IndirectY w8) ->
-      void $ traverse assembleROMInternal [0x31, w8]
+      void $ traverse assembleROM [0x31, w8]
     Right (Label text) -> K.do
       res <- resolveLabel text
       and res
@@ -137,18 +160,26 @@ and oprText = K.do
 asl :: T.Text -> Korigatachi ()
 asl oprText = K.do
   K.codeGen (spacing <> "asl " <> oprText)
-  case Attoparsec.parseOnly parseOperand oprText of
+  let
+    parseASL =
+      parseImmediate <|>
+      parseZeroPage <|>
+      parseZeroPageX <|>
+      parseAbsolute <|>
+      parseAbsoluteX <|>
+      parseLabel
+  case Attoparsec.parseOnly parseASL oprText of
     Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
     Right Accumulator ->
-      void $ traverse assembleROMInternal [0x0a]
+      void $ traverse assembleROM [0x0a]
     Right (ZeroPage w8) ->
-      void $ traverse assembleROMInternal [0x06, w8]
+      void $ traverse assembleROM [0x06, w8]
     Right (ZeroPageX w8) ->
-      void $ traverse assembleROMInternal [0x16, w8]
+      void $ traverse assembleROM [0x16, w8]
     Right (Absolute ll hh) ->
-      void $ traverse assembleROMInternal [0x0e, ll, hh]
+      void $ traverse assembleROM [0x0e, ll, hh]
     Right (AbsoluteX ll hh) ->
-      void $ traverse assembleROMInternal [0x1e, ll, hh]
+      void $ traverse assembleROM [0x1e, ll, hh]
     Right (Label text) -> K.do
       res <- resolveLabel text
       asl res
@@ -156,11 +187,15 @@ asl oprText = K.do
 
 bne :: T.Text -> Korigatachi ()
 bne oprText = K.do
+  let
+    parseBNE =
+      parseRelative <|>
+      parseLabel
   K.codeGen (spacing <> "bne " <> oprText)
-  case Attoparsec.parseOnly parseOperand oprText of
+  case Attoparsec.parseOnly parseBNE oprText of
     Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
     Right (Relative w8) ->
-      void $ traverse assembleROMInternal [0xD0, w8]
+      void $ traverse assembleROM [0xD0, w8]
     Right (Label text) -> K.do -- i hate this operand bullshit
       res <- resolveLabel text
       bne res
@@ -169,27 +204,35 @@ bne oprText = K.do
 cld :: Korigatachi ()
 cld = K.do
   K.codeGen (spacing <> "cld")
-  assembleROMInternal 0xD8
+  assembleROM 0xD8
 
 dex :: Korigatachi ()
 dex = K.do
   K.codeGen (spacing <> "dex")
-  assembleROMInternal 0xCA
+  assembleROM 0xCA
 
 dey :: Korigatachi ()
 dey = K.do
   K.codeGen (spacing <> "dey")
-  assembleROMInternal 0x88
+  assembleROM 0x88
 
 jmp :: T.Text -> Korigatachi ()
 jmp oprText = K.do
   K.codeGen (spacing <> "JMP " <> oprText)
-  case Attoparsec.parseOnly parseOperand oprText of
+  let
+    parseJMP =
+      parseAbsolute <|>
+      parseIndirect <|>
+      parseLabel
+  case Attoparsec.parseOnly parseJMP oprText of
     Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
     Right (Absolute ll hh) ->
-      void $ traverse assembleROMInternal [0x4C, ll, hh]
+      void $ traverse assembleROM [0x4C, ll, hh]
     Right (Indirect ll hh) ->
-      void $ traverse assembleROMInternal [0x6C, ll, hh]
+      void $ traverse assembleROM [0x6C, ll, hh]
+    Right (Label text) -> K.do
+      res <- resolveLabel text
+      jmp res
     _ -> K.log K.Warn ("Invalid operand for JMP: " <> oprText)
 
 lda :: T.Text -> Korigatachi ()
@@ -198,21 +241,21 @@ lda oprText = K.do
   case Attoparsec.parseOnly parseOperand oprText of
     Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
     Right (Immediate w8) ->
-      void $ traverse assembleROMInternal [0xA9, w8]
+      void $ traverse assembleROM [0xA9, w8]
     Right (ZeroPage w8) ->
-      void $ traverse assembleROMInternal [0xA5, w8]
+      void $ traverse assembleROM [0xA5, w8]
     Right (ZeroPageX w8) ->
-      void $ traverse assembleROMInternal [0xB5, w8]
+      void $ traverse assembleROM [0xB5, w8]
     Right (Absolute ll hh) ->
-      void $ traverse assembleROMInternal [0xAD, ll, hh]
+      void $ traverse assembleROM [0xAD, ll, hh]
     Right (AbsoluteX ll hh) ->
-      void $ traverse assembleROMInternal [0xBD, ll, hh]
+      void $ traverse assembleROM [0xBD, ll, hh]
     Right (AbsoluteY ll hh) ->
-      void $ traverse assembleROMInternal [0xB9, ll, hh]
+      void $ traverse assembleROM [0xB9, ll, hh]
     Right (IndirectX w8) ->
-      void $ traverse assembleROMInternal [0xA1, w8]
+      void $ traverse assembleROM [0xA1, w8]
     Right (IndirectY w8) ->
-      void $ traverse assembleROMInternal [0xB1, w8]
+      void $ traverse assembleROM [0xB1, w8]
     _ -> K.log K.Warn ("Invalid operand for LDA: " <> oprText)
 
 -- lda oprText = instruct LDA oprText $ \opr -> K.do
@@ -225,15 +268,15 @@ ldx oprText = K.do
   case Attoparsec.parseOnly parseOperand oprText of
     Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
     Right (Immediate w8) ->
-      void $ traverse assembleROMInternal [0xA2, w8]
+      void $ traverse assembleROM [0xA2, w8]
     Right (ZeroPage w8) ->
-      void $ traverse assembleROMInternal [0xA6, w8]
+      void $ traverse assembleROM [0xA6, w8]
     Right (ZeroPageY w8) ->
-      void $ traverse assembleROMInternal [0xB6, w8]
+      void $ traverse assembleROM [0xB6, w8]
     Right (Absolute ll hh) ->
-      void $ traverse assembleROMInternal [0xAE, ll, hh]
+      void $ traverse assembleROM [0xAE, ll, hh]
     Right (AbsoluteY ll hh) ->
-      void $ traverse assembleROMInternal [0xBE, ll, hh]
+      void $ traverse assembleROM [0xBE, ll, hh]
     _ -> K.log K.Warn ("Invalid operand for LDX: " <> oprText)
 
 ldy :: T.Text -> Korigatachi ()
@@ -242,21 +285,21 @@ ldy oprText = K.do
   case Attoparsec.parseOnly parseOperand oprText of
     Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
     Right (Immediate w8) ->
-      void $ traverse assembleROMInternal [0xA0, w8]
+      void $ traverse assembleROM [0xA0, w8]
     Right (ZeroPage w8) ->
-      void $ traverse assembleROMInternal [0xA4, w8]
+      void $ traverse assembleROM [0xA4, w8]
     Right (ZeroPageX w8) ->
-      void $ traverse assembleROMInternal [0xB4, w8]
+      void $ traverse assembleROM [0xB4, w8]
     Right (Absolute ll hh) ->
-      void $ traverse assembleROMInternal [0xAC, ll, hh]
+      void $ traverse assembleROM [0xAC, ll, hh]
     Right (AbsoluteX ll hh) ->
-      void $ traverse assembleROMInternal [0xBC, ll, hh]
+      void $ traverse assembleROM [0xBC, ll, hh]
     _ -> K.log K.Warn ("Invalid operand for LDY: " <> oprText)
 
 sei :: Korigatachi ()
 sei = K.do
   K.codeGen (spacing <> "sei")
-  assembleROMInternal 0x78
+  assembleROM 0x78
 
 -- sei :: Korigatachi ()
 -- sei = instruct SEI "" (\_ -> setFlags 0b00000100)
@@ -267,19 +310,19 @@ sta oprText = K.do
   case Attoparsec.parseOnly parseOperand oprText of
     Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
     Right (ZeroPage w8) ->
-      void $ traverse assembleROMInternal [0x85, w8]
+      void $ traverse assembleROM [0x85, w8]
     Right (ZeroPageX w8) ->
-      void $ traverse assembleROMInternal [0x95, w8]
+      void $ traverse assembleROM [0x95, w8]
     Right (Absolute ll hh) ->
-      void $ traverse assembleROMInternal [0x8D, ll, hh]
+      void $ traverse assembleROM [0x8D, ll, hh]
     Right (AbsoluteX ll hh) ->
-      void $ traverse assembleROMInternal [0x9D, ll, hh]
+      void $ traverse assembleROM [0x9D, ll, hh]
     Right (AbsoluteY ll hh) ->
-      void $ traverse assembleROMInternal [0x99, ll, hh]
+      void $ traverse assembleROM [0x99, ll, hh]
     Right (IndirectX w8) ->
-      void $ traverse assembleROMInternal [0x81, w8]
+      void $ traverse assembleROM [0x81, w8]
     Right (IndirectY w8) ->
-      void $ traverse assembleROMInternal [0x91, w8]
+      void $ traverse assembleROM [0x91, w8]
     opr -> K.log K.Warn ("Invalid operand for STA: " <> oprText <> " " <> (T.show opr))
 
 -- sta :: T.Text -> Korigatachi ()
@@ -294,11 +337,11 @@ stx oprText = K.do
   case Attoparsec.parseOnly parseOperand oprText of
     Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
     Right (ZeroPage w8) ->
-      void $ traverse assembleROMInternal [0x86, w8]
+      void $ traverse assembleROM [0x86, w8]
     Right (ZeroPageY w8) ->
-      void $ traverse assembleROMInternal [0x96, w8]
+      void $ traverse assembleROM [0x96, w8]
     Right (Absolute ll hh) ->
-      void $ traverse assembleROMInternal [0x8E, ll, hh]
+      void $ traverse assembleROM [0x8E, ll, hh]
     _ -> K.log K.Warn ("Invalid operand for stX: " <> oprText)
 
 sty :: T.Text -> Korigatachi ()
@@ -307,42 +350,42 @@ sty oprText = K.do
   case Attoparsec.parseOnly parseOperand oprText of
     Left _ -> K.log K.Warn ("Failed to parse operand: " <> oprText)
     Right (ZeroPage w8) ->
-      void $ traverse assembleROMInternal [0x84, w8]
+      void $ traverse assembleROM [0x84, w8]
     Right (ZeroPageX w8) ->
-      void $ traverse assembleROMInternal [0x94, w8]
+      void $ traverse assembleROM [0x94, w8]
     Right (Absolute ll hh) ->
-      void $ traverse assembleROMInternal [0x8C, ll, hh]
+      void $ traverse assembleROM [0x8C, ll, hh]
     _ -> K.log K.Warn ("Invalid operand for stY: " <> oprText)
 
 tax :: Korigatachi ()
 tax = K.do
   K.codeGen (spacing <> "tax")
-  assembleROMInternal 0xaa
+  assembleROM 0xaa
 
 tay :: Korigatachi ()
 tay = K.do
   K.codeGen (spacing <> "tay")
-  assembleROMInternal 0xa8
+  assembleROM 0xa8
 
 tsx :: Korigatachi ()
 tsx = K.do
   K.codeGen (spacing <> "tsx")
-  assembleROMInternal 0xBA
+  assembleROM 0xBA
 
 txa :: Korigatachi ()
 txa = K.do
   K.codeGen (spacing <> "txa")
-  assembleROMInternal 0x8a
+  assembleROM 0x8a
 
 txs :: Korigatachi ()
 txs = K.do
   K.codeGen (spacing <> "txs")
-  assembleROMInternal 0x9a
+  assembleROM 0x9a
 
 tya :: Korigatachi ()
 tya = K.do
   K.codeGen (spacing <> "tya")
-  assembleROMInternal 0x98
+  assembleROM 0x98
 
 -- txs :: Korigatachi ()
 -- txs = instruct TXS "" $ \_ ->

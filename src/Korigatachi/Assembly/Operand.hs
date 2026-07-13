@@ -303,6 +303,9 @@ parseIndirect = do
   void $ Attoparsec.char ')'
   pure $ Indirect ll hh
 
+parseLabel :: Attoparsec.Parser Operand
+parseLabel = Label <$> Attoparsec.takeText
+    
 parseOperand :: Attoparsec.Parser Operand
 parseOperand =
   parseImmediate
