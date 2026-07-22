@@ -9,6 +9,9 @@
 
 module Korigatachi.Model where
 
+-- containers
+import Data.Map.Strict qualified as Map
+
 -- finite-typelits
 import Data.Finite (finite)
 
@@ -22,6 +25,7 @@ import Data.Vector.Sized qualified as Sized
 -- base
 
 import Data.Bits (Bits (bit, (.|.)), testBit)
+import Data.List as List
 import Data.Word (Word8)
 import Prelude hiding (break)
 
@@ -432,6 +436,16 @@ instructions _ = jamInstruction
 
 jamInstruction :: Instruction
 jamInstruction = Instruction JAM "Implied" 0x02 0 0 "Freeze the CPU"
+
+allInstructions :: Map.Map Shorthand [Instruction]
+allInstructions =
+  Map.fromListWith (flip (++)) $
+    (\ins -> (shorthand ins, [ins])) <$> (instructions <$> [0x00 .. 0xFF])
+
+-- fmap (\(x:xs) -> (shorthand x, xs))
+--   . List.groupBy (\a b -> (shorthand a) == (shorthand b))
+--   . List.sortBy (\a b -> shorthand a `compare` shorthand b)
+--   $ instructions <$> [0x00..0xFF]
 
 -- Something that might be able to be done is bounds-checking as a CONSTRAINT, but prolly not.
 

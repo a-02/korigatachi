@@ -305,7 +305,7 @@ parseIndirect = do
 
 parseLabel :: Attoparsec.Parser Operand
 parseLabel = Label <$> Attoparsec.takeText
-    
+
 parseOperand :: Attoparsec.Parser Operand
 parseOperand =
   parseImmediate

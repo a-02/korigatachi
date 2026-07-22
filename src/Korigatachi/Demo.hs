@@ -15,6 +15,7 @@ module Korigatachi.Demo where
 
 import Korigatachi.Assembly
 import Korigatachi.Assembly.Pattern
+import Korigatachi.Instructions
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types
 

@@ -52,7 +52,7 @@ extra-doc-files:    CHANGELOG.md
 -- extra-source-files:
 
 common warnings
-    ghc-options: -Wall
+    ghc-options: -Wall -ddump-splices -dth-dec-file
 
 library
     -- Import common warning flags.
@@ -67,6 +67,7 @@ library
         Korigatachi.Assembly.ReadWrite
         Korigatachi.Control
         Korigatachi.Demo
+        Korigatachi.Instructions
         Korigatachi.Model
         Korigatachi.Monad
         Korigatachi.Types
@@ -82,6 +83,7 @@ library
         attoparsec,
         base,
         bytestring,
+        containers,
         finite-typelits,
         insert-ordered-containers,
         mono-traversable,
@@ -91,7 +93,9 @@ library
         th-lift,
         transformers,
         vector-sized,
-        witherable
+        witherable,
+        haskell-src-meta,
+        haskell-src-exts
 
     -- Directories containing source files.
     hs-source-dirs:   src
