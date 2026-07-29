@@ -83,6 +83,7 @@ waitForVblankEnd = K.do
 
 scanLoop :: Korigatachi ()
 scanLoop = K.do
+  label "ScanLoop"
   lda SWCHA -- load joysticks
   sta COLUBK -- store as background
   sta WSYNC
@@ -95,6 +96,7 @@ scanLoop = K.do
 
 overScanWait :: Korigatachi ()
 overScanWait = K.do
+  label "OverScanWait"
   sta WSYNC
   dex
   bne "OverScanWait"
