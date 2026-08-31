@@ -32,68 +32,68 @@ resolve :: K.Hane K.Assemble K.Resolve ()
 resolve = K.do
   (K.Assemble statements) <- K.get
   -- Neat trick!
-  K.modify $
-    \_ ->
-      K.Resolve
-        { K.resolveStatements = Seq.empty
-        , K.resolveLabels = Seq.empty
-        , K.resolveCodegen = Seq.empty
-        , K.resolveProgramCounter = 0
-        }
+  K.put $ -- Initialize the Resolve state.
+    K.Resolve
+      { K.resolveStatements = Seq.empty
+      , K.resolveLabels = Seq.empty
+      , K.resolveCodegen = Seq.empty
+      , K.resolveProgramCounter = 0
+      }
   let
     resolveStatement :: K.Statement -> K.Hane K.Resolve K.Resolve ()
-    resolveStatement statement =
+    resolveStatement statement = K.do
+      -- These don't change per statement.
       K.modify $
         \rsv@(K.Resolve {..}) ->
-          case statement of
-            K.Instruct sh opr ->
-              case opr of
-                K.Label labelAddrModes lb ->
-                  rsv
-                    { K.resolveCodegen = resolveCodegen Seq.|> renderStatement statement
-                    , K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr
-                    , K.resolveStatements =
-                        resolveStatements
-                          Seq.|> (K.Instruct sh $ resolveLabel resolveLabels labelAddrModes lb)
-                    }
-                _ ->
-                  rsv
-                    { K.resolveCodegen = resolveCodegen Seq.|> renderStatement statement
-                    , K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr
-                    , K.resolveStatements = resolveStatements Seq.|> statement
-                    }
-            K.TopLevelLabel label ->
-              rsv
-                { K.resolveCodegen = resolveCodegen Seq.|> renderStatement statement
-                , K.resolveLabels = resolveLabels Seq.|> (resolveProgramCounter, label)
-                , K.resolveStatements = resolveStatements Seq.|> statement
-                }
-            K.Org w16 ->
-              rsv
-                { K.resolveCodegen = resolveCodegen Seq.|> renderStatement statement
-                , K.resolveProgramCounter = w16
-                , K.resolveStatements = resolveStatements Seq.|> statement
-                }
-            _ ->
-              rsv
-                { K.resolveCodegen = resolveCodegen Seq.|> renderStatement statement
-                , K.resolveStatements = resolveStatements Seq.|> statement
-                }
+          rsv
+            { K.resolveStatements = resolveStatements Seq.|> statement
+            , K.resolveCodegen = resolveCodegen Seq.|> renderStatement statement
+            }
+      -- These do.
+      case statement of
+        K.TopLevelLabel label -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveLabels = resolveLabels Seq.|> (resolveProgramCounter, label)}
+        K.Org w16 -> K.modify $ \rsv -> rsv {K.resolveProgramCounter = w16}
+        K.Instruct sh opr ->
+          case opr of
+            K.Label labelAddrModes lb -> K.do
+              labels <- K.resolveLabels <$> K.get
+              res <- resolveLabel labels labelAddrModes lb
+              K.modify $ \rsv@(K.Resolve {..}) ->
+                rsv
+                  { K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr
+                  , K.resolveStatements =
+                      resolveStatements
+                        Seq.|> (K.Instruct sh res)
+                  }
+            _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr}
+        _ -> pure ()
   void $ traverse resolveStatement statements
   pure ()
 
-resolveLabel :: Seq.Seq (Word16, T.Text) -> [K.LabelAddressing] -> T.Text -> K.Operand
+-- There's some opportunity for improvement here. This being an eDSL and not a traditional
+-- assembler, there's no way for a Zero Page label to exist. Defining a local variable in
+-- the "assembly" would be done using as Haskell let binding and doesn't need to be
+-- represented in the abstract here.
+--
+-- We need to implement the special Relative Addressing behavior. Well. I do.
+
+resolveLabel :: Seq.Seq (Word16, T.Text) -> [K.LabelAddressing] -> T.Text -> K.Hane K.Resolve K.Resolve K.Operand
 resolveLabel labels labelAddressing toResolve =
   let
     found = Seq.lookup 0 $ Seq.filter (\(_, lb) -> lb == toResolve) labels
   in
     case (found, labelAddressing) of
-      (Nothing, _) -> K.Label [] "FUCK"
-      (_, []) -> K.Label [] "FUCK"
+      (Nothing, _) -> K.do
+        K.log K.Warn $ "Unrecognized label: " <> toResolve
+        pure $ K.Label [] ""
+      (_, []) -> K.do
+        K.log K.Warn "Missing label addressing modes."
+        pure $ K.Label [] "Missing label addressing modes. Check the logs."
       (Just (addr, _), (a : _)) ->
         -- go away
-        reifyLabel a addr
+        pure $ reifyLabel a addr
 
+-- | TODO: Better name!
 reifyLabel :: K.LabelAddressing -> Word16 -> K.Operand
 reifyLabel la w16 =
   let
