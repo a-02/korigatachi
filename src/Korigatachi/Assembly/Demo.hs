@@ -11,15 +11,15 @@
 
 {- HLINT ignore "Use $>" -}
 
-module Korigatachi.Demo where
+module Korigatachi.Assembly.Demo where
 
-import Korigatachi.Assembly
+import Korigatachi.Assembly.Control
+import Korigatachi.Assembly.Instruction
 import Korigatachi.Assembly.Pattern
-import Korigatachi.Instructions
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types
 
-sample :: Korigatachi ()
+sample :: Assembly ()
 sample = K.do
   preamble
   org 0xF000
@@ -33,8 +33,10 @@ sample = K.do
   word 0xF000
   word 0xF000
 
+-- This is a direct translation of Kirk Israel's "thin red line".
+
 -- | The standard Atari 2600 start script.
-start :: Korigatachi ()
+start :: Assembly ()
 start = K.do
   label "Start"
   sei
@@ -43,7 +45,7 @@ start = K.do
   txs
   lda "#$00"
 
-clearMem :: Korigatachi ()
+clearMem :: Assembly ()
 clearMem = K.do
   label "ClearMem"
   sta "(0,X)"
@@ -55,7 +57,7 @@ clearMem = K.do
   lda "#33"
   sta COLUP0
 
-mainLoop :: Korigatachi ()
+mainLoop :: Assembly ()
 mainLoop = K.do
   label "MainLoop"
   lda "#2"
@@ -68,7 +70,7 @@ mainLoop = K.do
   lda "#0"
   sta VSYNC
 
-waitForVblankEnd :: Korigatachi ()
+waitForVblankEnd :: Assembly ()
 waitForVblankEnd = K.do
   label "WaitForVblankEnd"
   lda INTIM
@@ -81,7 +83,7 @@ waitForVblankEnd = K.do
   sta WSYNC
   sta HMOVE
 
-scanLoop :: Korigatachi ()
+scanLoop :: Assembly ()
 scanLoop = K.do
   label "ScanLoop"
   lda SWCHA -- load joysticks
@@ -94,7 +96,7 @@ scanLoop = K.do
   sta VBLANK
   ldx "#30"
 
-overScanWait :: Korigatachi ()
+overScanWait :: Assembly ()
 overScanWait = K.do
   label "OverScanWait"
   sta WSYNC

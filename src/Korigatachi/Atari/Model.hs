@@ -2,12 +2,14 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
-module Korigatachi.Model where
+module Korigatachi.Atari.Model where
 
 -- containers
 import Data.Map.Strict qualified as Map
@@ -30,31 +32,7 @@ import Data.Word (Word8)
 import Prelude hiding (break)
 
 -- korigatachi
-import Korigatachi.Monad as K
 import Korigatachi.Types
-
--- | Write to the writer.
-katteyomi :: T.Text -> T.Text -> Korigatachi ()
-katteyomi logMsg code = tell (Katteyomi logMsg code)
-
--- | Log a message regardless of loglevel.
-logAny :: T.Text -> Korigatachi ()
-logAny logMsg = katteyomi (logMsg <> "\n") ""
-
--- | Output generated code to the writer.
-codeGen :: T.Text -> Korigatachi ()
-codeGen code = katteyomi "" (code <> "\n")
-
-{- | Log a message at a specific log level.
-This will only log messages that are at or above
-the current verbosity level of the program.
--}
-log :: LogLevel -> T.Text -> Korigatachi ()
-log level logMsg = K.do
-  currentLevel <- logLevel <$> K.ask
-  if level >= currentLevel
-    then logAny (T.show level <> logMsg)
-    else K.ixpure ()
 
 -- | An Atari with nothing. Every register is 0'd out.
 emptyAtari :: Atari
@@ -149,19 +127,29 @@ emptyRegisters :: Registers
 emptyRegisters = Registers 0 0 0
 
 flagsToWord8 :: Flags -> Word8
-flagsToWord8 Flags {..} =
-  let
-    bitBool False _ = 0
-    bitBool True x = bit x
-  in
-    bitBool negative 7
-      .|. bitBool overflow 6
-      .|. bitBool ignored 5
-      .|. bitBool break 4
-      .|. bitBool decimal 3
-      .|. bitBool interrupt 2
-      .|. bitBool zero 1
-      .|. bitBool carry 0 -- Strange, isn't it?
+flagsToWord8
+  Flags
+    { negative
+    , overflow
+    , ignored
+    , break
+    , decimal
+    , interrupt
+    , zero
+    , carry
+    } =
+    let
+      bitBool False _ = 0
+      bitBool True x = bit x
+    in
+      bitBool negative 7
+        .|. bitBool overflow 6
+        .|. bitBool ignored 5
+        .|. bitBool break 4
+        .|. bitBool decimal 3
+        .|. bitBool interrupt 2
+        .|. bitBool zero 1
+        .|. bitBool carry 0 -- Strange, isn't it?
 
 word8ToFlags :: Word8 -> Flags
 word8ToFlags w8 =
@@ -175,6 +163,11 @@ word8ToFlags w8 =
     , zero = testBit w8 1
     , carry = testBit w8 0
     }
+
+allInstructions :: Map.Map Shorthand [Instruction]
+allInstructions =
+  Map.fromListWith (flip (++)) $
+    (\ins -> (shorthand ins, [ins])) <$> (instructions <$> [0x00 .. 0xFF])
 
 instructions :: Word8 -> Instruction
 instructions 0x00 = Instruction BRK "Implied" 0x00 1 7 "Force Break"
@@ -436,11 +429,6 @@ instructions _ = jamInstruction
 
 jamInstruction :: Instruction
 jamInstruction = Instruction JAM "Implied" 0x02 0 0 "Freeze the CPU"
-
-allInstructions :: Map.Map Shorthand [Instruction]
-allInstructions =
-  Map.fromListWith (flip (++)) $
-    (\ins -> (shorthand ins, [ins])) <$> (instructions <$> [0x00 .. 0xFF])
 
 -- fmap (\(x:xs) -> (shorthand x, xs))
 --   . List.groupBy (\a b -> (shorthand a) == (shorthand b))

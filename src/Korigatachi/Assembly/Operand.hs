@@ -19,16 +19,11 @@ import Data.Word (Word16, Word8)
 -- bytestring
 
 -- optics
-import Optics
 
 -- korigatachi
 
-import Data.String (IsString (fromString))
 import Data.Text qualified as T
-import Korigatachi.Control qualified as K
-import Korigatachi.Model qualified as K
-import Korigatachi.Monad qualified as K
-import Korigatachi.Types (Korigatachi, Operand (..))
+import Korigatachi.Types (Operand (..))
 import Korigatachi.Types qualified as K
 
 splitWord16 :: Word16 -> (Word8, Word8) -- Little-endian, (LL, HH)
@@ -39,60 +34,60 @@ splitWord16 w16 =
   in
     (fromIntegral ll, fromIntegral hh)
 
-operandToWord16 :: Operand -> Korigatachi Word16
-operandToWord16 = \case
-  Accumulator -> K.do
-    K.logErr "operandToWord16 called on valueless operand"
-    K.ixpure 0xFFFF
-  Implied -> K.do
-    K.logErr "operandToWord16 called on valueless operand"
-    K.ixpure 0xFFFF
-  Immediate w8 -> K.ixpure $ fromIntegral w8
-  IndirectX w8 -> K.ixpure $ fromIntegral w8
-  IndirectY w8 -> K.ixpure $ fromIntegral w8
-  Relative w8 -> K.ixpure $ fromIntegral w8
-  ZeroPage w8 -> K.ixpure $ fromIntegral w8
-  ZeroPageX w8 -> K.do
-    x <- K.query $ \a -> K.x . K.generalRegisters $ K.cpu a
-    K.ixpure $ fromIntegral (w8 + x)
-  ZeroPageY w8 -> K.do
-    y <- K.query $ \a -> K.y . K.generalRegisters $ K.cpu a
-    K.ixpure $ fromIntegral (w8 + y)
-  Absolute ll hh ->
-    let
-      low = fromIntegral ll
-      high = fromIntegral hh
-    in
-      K.ixpure $ high * 256 + low
-  AbsoluteX ll hh ->
-    let
-      low = fromIntegral ll
-      high = fromIntegral hh
-    in
-      K.do
-        x <- K.query $ \a -> K.x . K.generalRegisters $ K.cpu a
-        K.ixpure $ high * 256 + low + (fromIntegral x)
-  AbsoluteY ll hh ->
-    let
-      low = fromIntegral ll
-      high = fromIntegral hh
-    in
-      K.do
-        y <- K.query $ \a -> K.y . K.generalRegisters $ K.cpu a
-        K.ixpure $ high * 256 + low + (fromIntegral y)
-  Indirect ll hh ->
-    let
-      low = fromIntegral ll
-      high = fromIntegral hh
-    in
-      K.ixpure $ high * 256 + low
-  Label label -> K.do
-    romLabels <- K.query $ \a -> K.labels $ K.rom a
-    case filter (\(K.MemoryLabel tx _) -> tx == label) romLabels of
-      [] -> K.do
-        K.katteyomi ("unable to resolve label: " <> label) ""
-        K.ixpure 0xFFFF
-      ((K.MemoryLabel _ labelLocation) : _) -> K.ixpure labelLocation
+-- operandToWord16 :: Operand -> K.Hane i i Word16
+-- operandToWord16 = \case
+--   Accumulator -> K.do
+--     K.logErr "operandToWord16 called on valueless operand"
+--     K.ixpure 0xFFFF
+--   Implied -> K.do
+--     K.logErr "operandToWord16 called on valueless operand"
+--     K.ixpure 0xFFFF
+--   Immediate w8 -> K.ixpure $ fromIntegral w8
+--   IndirectX w8 -> K.ixpure $ fromIntegral w8
+--   IndirectY w8 -> K.ixpure $ fromIntegral w8
+--   Relative w8 -> K.ixpure $ fromIntegral w8
+--   ZeroPage w8 -> K.ixpure $ fromIntegral w8
+--   ZeroPageX w8 -> K.do
+--     x <- K.query $ \a -> K.x . K.generalRegisters $ K.cpu a
+--     K.ixpure $ fromIntegral (w8 + x)
+--   ZeroPageY w8 -> K.do
+--     y <- K.query $ \a -> K.y . K.generalRegisters $ K.cpu a
+--     K.ixpure $ fromIntegral (w8 + y)
+--   Absolute ll hh ->
+--     let
+--       low = fromIntegral ll
+--       high = fromIntegral hh
+--     in
+--       K.ixpure $ high * 256 + low
+--   AbsoluteX ll hh ->
+--     let
+--       low = fromIntegral ll
+--       high = fromIntegral hh
+--     in
+--       K.do
+--         x <- K.query $ \a -> K.x . K.generalRegisters $ K.cpu a
+--         K.ixpure $ high * 256 + low + (fromIntegral x)
+--   AbsoluteY ll hh ->
+--     let
+--       low = fromIntegral ll
+--       high = fromIntegral hh
+--     in
+--       K.do
+--         y <- K.query $ \a -> K.y . K.generalRegisters $ K.cpu a
+--         K.ixpure $ high * 256 + low + (fromIntegral y)
+--   Indirect ll hh ->
+--     let
+--       low = fromIntegral ll
+--       high = fromIntegral hh
+--     in
+--       K.ixpure $ high * 256 + low
+--   Label label -> K.do
+--     romLabels <- K.query $ \a -> K.labels $ K.rom a
+--     case filter (\(K.MemoryLabel tx _) -> tx == label) romLabels of
+--       [] -> K.do
+--         K.katteyomi ("unable to resolve label: " <> label) ""
+--         K.ixpure 0xFFFF
+--       ((K.MemoryLabel _ labelLocation) : _) -> K.ixpure labelLocation
 
 toAddressingMode :: Operand -> T.Text
 toAddressingMode = \case
@@ -109,60 +104,7 @@ toAddressingMode = \case
   AbsoluteX _ _ -> "AbsoluteX"
   AbsoluteY _ _ -> "AbsoluteY"
   Indirect _ _ -> "Indirect"
-  Label _ -> "Label"
-
-oprIso :: Iso' Operand String
-oprIso = iso operandToString stringToOperand
-
-instance IsString Operand where
-  fromString = (oprIso #)
-
-operandToString :: Operand -> String
-operandToString Accumulator = "" -- For completeness.
-operandToString Implied = "" -- For completeness.
-operandToString (Immediate opr) = "#$" <> (opr ^. K.hex8)
-operandToString (IndirectX opr) = "($" <> (opr ^. K.hex8) <> ",x)"
-operandToString (IndirectY opr) = "($" <> (opr ^. K.hex8) <> "),y"
-operandToString (Relative opr) = "r$" <> (opr ^. K.hex8)
-operandToString (ZeroPage opr) = "$" <> (opr ^. K.hex8)
-operandToString (ZeroPageX opr) = "$" <> (opr ^. K.hex8) <> ",x"
-operandToString (ZeroPageY opr) = "$" <> (opr ^. K.hex8) <> ",y"
-operandToString (Absolute ll hh) =
-  let
-    low :: Word16
-    low = fromIntegral ll
-    high :: Word16
-    high = fromIntegral hh
-  in
-    "$" <> ((high * 256 + low) ^. K.hex16) -- order of operations?
-operandToString (AbsoluteX ll hh) =
-  let
-    low :: Word16
-    low = fromIntegral ll
-    high :: Word16
-    high = fromIntegral hh
-  in
-    "$" <> ((high * 256 + low) ^. K.hex16) <> ",x" -- order of operations?
-operandToString (AbsoluteY ll hh) =
-  let
-    low :: Word16
-    low = fromIntegral ll
-    high :: Word16
-    high = fromIntegral hh
-  in
-    "$" <> ((high * 256 + low) ^. K.hex16) <> ",y" -- order of operations?
-operandToString (Indirect ll hh) =
-  let
-    low :: Word16
-    low = fromIntegral ll
-    high :: Word16
-    high = fromIntegral hh
-  in
-    "($" <> ((high * 256 + low) ^. K.hex16) <> ")" -- order of operations?
-operandToString (Label lb) = T.unpack lb
-
-stringToOperand :: String -> Operand
-stringToOperand _operand = undefined
+  Label _ _ -> "Label"
 
 isOctalDigit :: Char -> Bool
 isOctalDigit c = let w = ord c in w >= 49 && w <= 55
@@ -304,39 +246,7 @@ parseIndirect = do
   pure $ Indirect ll hh
 
 parseLabel :: Attoparsec.Parser Operand
-parseLabel = Label <$> Attoparsec.takeText
-
-parseOperand :: Attoparsec.Parser Operand
-parseOperand =
-  parseImmediate
-    <|> parseZeroPage
-    <|> parseZeroPageX
-    <|> parseZeroPageY
-    <|> parseIndirectX
-    <|> parseIndirectY
-    <|> parseAbsolute
-    <|> parseAbsoluteX
-    <|> parseAbsoluteY
-    <|> parseIndirect
-    <|> parseRelative
-    <|> parseImplied
-    <|> parseAccumulator
-
-addressingModeToParser :: T.Text -> Attoparsec.Parser Operand
-addressingModeToParser "Accumulator" = parseAccumulator
-addressingModeToParser "Implied" = parseImplied
-addressingModeToParser "Indirect" = parseIndirect
-addressingModeToParser "IndirectX" = parseIndirectX
-addressingModeToParser "IndirectY" = parseIndirectY
-addressingModeToParser "ZeroPage" = parseZeroPage
-addressingModeToParser "ZeroPageX" = parseZeroPageX
-addressingModeToParser "ZeroPageY" = parseZeroPageY
-addressingModeToParser "Absolute" = parseAbsolute
-addressingModeToParser "AbsoluteX" = parseAbsoluteX
-addressingModeToParser "AbsoluteY" = parseAbsoluteY
-addressingModeToParser "Relative" = parseRelative
-addressingModeToParser "Immediate" = parseImmediate
-addressingModeToParser _ = K.Label <$> Attoparsec.takeText
+parseLabel = (Label []) <$> Attoparsec.takeText
 
 {-
 
