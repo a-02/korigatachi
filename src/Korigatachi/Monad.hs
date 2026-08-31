@@ -71,6 +71,9 @@ ask = RWIT $ \r i -> pure (r, i, mempty)
 get :: (Monoid w, Monad m) => RWIT r w m i i i
 get = RWIT $ \_ i -> pure (i, i, mempty)
 
+fail :: Monad m => String -> RWIT r String m i i ()
+fail = tell
+
 query :: (Applicative m, Monoid w) => (j -> a) -> RWIT r w m j j a
 query f = RWIT $ \_ i -> pure (f i, i, mempty)
 

@@ -88,7 +88,7 @@ data Resolve = Resolve
   { resolveStatements :: Seq.Seq Statement
   , resolveLabels :: Seq.Seq (Word16, T.Text)
   , resolveCodegen :: Seq.Seq T.Text
-  , resolveProgramCounter :: Int
+  , resolveProgramCounter :: Word16
   }
 
 data Env = Env
