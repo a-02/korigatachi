@@ -55,6 +55,7 @@ data Statement
   | Include T.Text
   | TopLevelLabel T.Text
   | Instruct Shorthand Operand
+  deriving (Show)
 
 -- -- | From the Japanese for "congealed shape". The monad to rule them all.
 -- type Korigatachi a = RWIT Env Katteyomi IO Atari Atari a
@@ -83,19 +84,17 @@ instance Monoid Katteyomi where
 
 -- | The list of Statements is constructed in order, so the O(1) append helps a ton.
 data Assemble = Assemble {assemble :: Seq.Seq Statement}
+  deriving (Show)
 
 data Resolve = Resolve
   { resolveStatements :: Seq.Seq Statement
   , resolveLabels :: Seq.Seq (Word16, T.Text)
   , resolveCodegen :: Seq.Seq T.Text
   , resolveProgramCounter :: Word16
-  }
+  } deriving Show
 
 data Env = Env
-  { assembler :: Bool
-  , emulator :: Bool
-  , display :: Bool
-  , logLevel :: LogLevel
+  { logLevel :: LogLevel
   }
 
 data LogLevel = Test | Info | Note | Warn | Crit

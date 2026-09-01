@@ -89,16 +89,14 @@ library
         bytestring,
         containers,
         finite-typelits,
-        insert-ordered-containers,
-        mono-traversable,
         optics,
         text,
         template-haskell,
-        th-lift,
         transformers,
         vector-sized,
         haskell-src-meta,
-        haskell-src-exts
+        haskell-src-exts,
+        pretty-show
 
     -- Directories containing source files.
     hs-source-dirs:   src
@@ -161,6 +159,7 @@ test-suite korigatachi-test
         criterion,
         tasty,
         tasty-hunit,
+        tasty-golden,
         tasty-smallcheck,
         tasty-quickcheck,
         tasty-program,

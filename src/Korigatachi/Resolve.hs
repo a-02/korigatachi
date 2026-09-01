@@ -41,7 +41,7 @@ resolve = K.do
       }
   let
 
-    indexedStatements = Seq.zip (Seq.fromList [(0 :: Int) ..]) statements
+    indexedStatements = Seq.zip (Seq.fromList [(0 :: Int) ..65535]) statements
 
     resolveCodegenHane :: K.Statement -> K.Hane K.Resolve K.Resolve ()
     resolveCodegenHane statement = K.do
@@ -97,7 +97,7 @@ reifyLabel la pc addr =
     intAddr = fromIntegral addr
     intPC :: Int
     intPC = fromIntegral pc
-    diff = fromIntegral $ intAddr - intPC -- This works cause of literal overflow.
+    diff = fromIntegral $ intPC - intAddr -- This works cause of literal overflow.
   in
     case la of
       K.LabelAbsolute -> K.Absolute hh ll

@@ -98,6 +98,14 @@ listens f m = RWIT $ \r i -> do
   (a, j, w) <- runRWIT m r i
   pure ((a, f w), j, w)
 
+lift :: (Monad m, Monoid w) => m a -> RWIT r w m i i a
+lift ma = RWIT $ \_ i -> do
+  a <- ma
+  pure (a, i, mempty)
+
+liftIO :: Monoid w => IO a -> RWIT r w IO i i a
+liftIO = lift
+
 {- | A monad transformer adding an environment of type @r@,
 collecting state between phantom types @i@ and @j@,
 and writing to an output of type @w@.

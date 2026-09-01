@@ -52,18 +52,37 @@ renderInstruction (sh, insList) =
     parseFnName = "parse" <> (T.show sh)
     parserAlternatives = foldMap (\addrMode -> "parse" <> addrMode <> " <|> ") addressingModes <> "parseLabel"
   in
-    if hasArity
-      then
-        [ lowercased <> " :: T.Text -> K.Assembly ()"
-        , lowercased <> " oprText ="
-        , "  let " <> parseFnName <> " = " <> parserAlternatives
-        , "   in case Attoparsec.parseOnly " <> parseFnName <> " oprText of"
-        , "        Left _ -> K.log K.Warn (\"Failed to parse operand: \" <> oprText)"
-        , "        Right (K.Label _ lb) ->"
-        , "          K.append $ K.Instruct K." <> (T.show sh) <> " (K.Label " <> labelAddressingModes <> " lb)"
-        , "        Right parsedOpr -> K.append $ K.Instruct K." <> (T.show sh) <> " parsedOpr"
-        ]
-      else
-        [ lowercased <> " :: K.Assembly ()"
-        , lowercased <> " = K.append $ K.Instruct K." <> (T.show sh) <> " K.Implied"
-        ]
+    case sh of
+      K.JMP ->
+            [ "jmp :: T.Text -> K.Assembly ()"
+            , "jmp oprText ="
+            , "  let parseJMP = " <> parserAlternatives
+            , "      stripped = fromMaybe \"\" $ ((snd <$>) . T.uncons) >=> ((fst <$>) . T.unsnoc) $ oprText"
+            , "      firstChar = snd <$> T.unsnoc oprText"
+            , "      lastChar = fst <$> T.uncons oprText"
+            , "   in case Attoparsec.parseOnly parseJMP oprText of"
+            , "        Left _ -> K.log K.Warn (\"Failed to parse operand: \" <> oprText)"
+            , "        Right (K.Label _ lb) ->"
+            , "          if (firstChar == Just \'(\') && (lastChar == Just \')\')"
+            , "          then"
+            , "            K.append $ K.Instruct K." <> (T.show sh) <> " (K.Label [K.LabelIndirect] stripped)"
+            , "          else"
+            , "            K.append $ K.Instruct K." <> (T.show sh) <> " (K.Label [K.LabelAbsolute] lb)"
+            , "        Right parsedOpr -> K.append $ K.Instruct K." <> (T.show sh) <> " parsedOpr"
+            ]
+      _ ->
+        if hasArity
+          then
+            [ lowercased <> " :: T.Text -> K.Assembly ()"
+            , lowercased <> " oprText ="
+            , "  let " <> parseFnName <> " = " <> parserAlternatives
+            , "   in case Attoparsec.parseOnly " <> parseFnName <> " oprText of"
+            , "        Left _ -> K.log K.Warn (\"Failed to parse operand: \" <> oprText)"
+            , "        Right (K.Label _ lb) ->"
+            , "          K.append $ K.Instruct K." <> (T.show sh) <> " (K.Label " <> labelAddressingModes <> " lb)"
+            , "        Right parsedOpr -> K.append $ K.Instruct K." <> (T.show sh) <> " parsedOpr"
+            ]
+          else
+            [ lowercased <> " :: K.Assembly ()"
+            , lowercased <> " = K.append $ K.Instruct K." <> (T.show sh) <> " K.Implied"
+            ]
