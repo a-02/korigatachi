@@ -247,13 +247,3 @@ parseIndirect = do
 
 parseLabel :: Attoparsec.Parser Operand
 parseLabel = (Label []) <$> Attoparsec.takeText
-
-{-
-
-how to parse an operand
-
-1. parse the outside to determine which addressing mode to use (including the '$')
-2. parse the number inside, word8 or word16 depending on mode
-  maybe negative, then prefix, then number
-
--}

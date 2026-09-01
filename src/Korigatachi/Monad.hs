@@ -71,6 +71,7 @@ ask = RWIT $ \r i -> pure (r, i, mempty)
 get :: (Monoid w, Monad m) => RWIT r w m i i i
 get = RWIT $ \_ i -> pure (i, i, mempty)
 
+-- | Why do we need this?
 fail :: Monad m => String -> RWIT r String m i i ()
 fail = tell
 

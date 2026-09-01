@@ -18,7 +18,7 @@ import Data.Sequence qualified as Seq
 -- import Data.Word (Word16)
 -- import Korigatachi.Control qualified as K
 
-import Data.Functor (void)
+import Data.Foldable (traverse_)
 import Data.Text qualified as T
 import Data.Word (Word16)
 import Korigatachi.Assembly.Operand (splitWord16)
@@ -32,53 +32,47 @@ resolve :: K.Hane K.Assemble K.Resolve ()
 resolve = K.do
   (K.Assemble statements) <- K.get
   -- Neat trick!
-  K.put $ -- Initialize the Resolve state.
+  K.put $ 
     K.Resolve
-      { K.resolveStatements = Seq.empty
+      { K.resolveStatements = statements
       , K.resolveLabels = Seq.empty
       , K.resolveCodegen = Seq.empty
       , K.resolveProgramCounter = 0
       }
   let
-    resolveStatement :: K.Statement -> K.Hane K.Resolve K.Resolve ()
-    resolveStatement statement = K.do
-      -- These don't change per statement.
-      K.modify $
-        \rsv@(K.Resolve {..}) ->
-          rsv
-            { K.resolveStatements = resolveStatements Seq.|> statement
-            , K.resolveCodegen = resolveCodegen Seq.|> renderStatement statement
-            }
-      -- These do.
+
+    indexedStatements = Seq.zip (Seq.fromList [(0 :: Int) ..]) statements
+
+    resolveCodegenHane :: K.Statement -> K.Hane K.Resolve K.Resolve ()
+    resolveCodegenHane statement = K.do
+      K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveCodegen = resolveCodegen Seq.|> renderStatement statement}
+
+    resolveTopLevelLabelHane :: K.Statement -> K.Hane K.Resolve K.Resolve ()
+    resolveTopLevelLabelHane statement = K.do
       case statement of
-        K.TopLevelLabel label -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveLabels = resolveLabels Seq.|> (resolveProgramCounter, label)}
         K.Org w16 -> K.modify $ \rsv -> rsv {K.resolveProgramCounter = w16}
+        K.TopLevelLabel label -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveLabels = resolveLabels Seq.|> (resolveProgramCounter, label)}
+        K.Instruct _ opr -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr}
+        K.Word _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 2}
+        _ -> pure ()
+
+    resolveStatementsHane :: Int -> K.Statement -> K.Hane K.Resolve K.Resolve ()
+    resolveStatementsHane statementIndex statement = K.do
+      case statement of
         K.Instruct sh opr ->
           case opr of
             K.Label labelAddrModes lb -> K.do
               labels <- K.resolveLabels <$> K.get
               res <- resolveLabel labels labelAddrModes lb
-              K.modify $ \rsv@(K.Resolve {..}) ->
-                rsv
-                  { K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr
-                  , K.resolveStatements =
-                      resolveStatements
-                        Seq.|> (K.Instruct sh res)
-                  }
-            _ -> K.modify $ \rsv@(K.Resolve {..}) ->
-              rsv {K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr}
+              K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveStatements = Seq.update statementIndex (K.Instruct sh res) resolveStatements}
+            _ -> pure ()
         _ -> pure ()
-  void $ traverse resolveStatement statements
+
+  traverse_ (resolveCodegenHane >> resolveTopLevelLabelHane) statements -- Technically, this is Pass 2.
+  traverse_ (uncurry resolveStatementsHane) indexedStatements -- Technically, this is Pass 4.
   pure ()
 
--- There's some opportunity for improvement here. This being an eDSL and not a traditional
--- assembler, there's no way for a Zero Page label to exist. Defining a local variable in
--- the "assembly" would be done using as Haskell let binding and doesn't need to be
--- represented in the abstract here.
---
--- We need to implement the special Relative Addressing behavior. Well. I do.
-
--- | Weird bug this introduces: We can only refer to labels in the past. Oops.
+-- | Refers to labels in the past AND future!
 resolveLabel :: Seq.Seq (Word16, T.Text) -> [K.LabelAddressing] -> T.Text -> K.Hane K.Resolve K.Resolve K.Operand
 resolveLabel labels labelAddressing toResolve = K.do
   pc <- K.resolveProgramCounter <$> K.get
@@ -90,9 +84,8 @@ resolveLabel labels labelAddressing toResolve = K.do
       pure $ K.Label [] ""
     (_, []) -> K.do
       K.log K.Warn "Missing label addressing modes."
-      pure $ K.Label [] "Missing label addressing modes. Check the logs."
+      pure $ K.Label [] ""
     (Just (addr, _), (labelAddrMode : _)) ->
-      -- go away
       pure $ reifyLabel labelAddrMode pc addr
 
 -- | TODO: Better name!
@@ -100,7 +93,11 @@ reifyLabel :: K.LabelAddressing -> Word16 -> Word16 -> K.Operand
 reifyLabel la pc addr =
   let
     (hh, ll) = splitWord16 addr
-    diff = fromIntegral $ addr - pc -- How far back are we going?
+    intAddr :: Int
+    intAddr = fromIntegral addr
+    intPC :: Int
+    intPC = fromIntegral pc
+    diff = fromIntegral $ intAddr - intPC -- This works cause of literal overflow.
   in
     case la of
       K.LabelAbsolute -> K.Absolute hh ll
@@ -176,9 +173,16 @@ operandToProgramCount (K.AbsoluteY _ _) = 3
 operandToProgramCount (K.Indirect _ _) = 3
 operandToProgramCount (K.Label labelAddrModes _) = foldl1 max $ labelAddressingModeProgramCount <$> labelAddrModes
 
--- | I think this is dead?
+-- | This is fine actually, since Relative is exclusive to conditional branch instructions.
 labelAddressingModeProgramCount :: K.LabelAddressing -> Word16
 labelAddressingModeProgramCount = \case
   K.LabelIndirect -> 2
   K.LabelRelative -> 1
   K.LabelAbsolute -> 2
+
+-- Indirect & Absolute can only be confused for each other with JMP ($4C and $6C).
+-- Disambiguating between the two would require a special syntax for "Indirect Labels".
+-- Something like "jmp (Start)". Which might be cool. And possibly useful.
+-- But not particularly fun to implement. Maybe something could be done with the TH implementation of JMP?
+-- Failed parses of Indirect that start with '(' get parsed down to Label [LabelIndirect] (tx :: T.Text).
+-- It'd require breaking apart the TH parseDecs call so much though. Just for this one case.
