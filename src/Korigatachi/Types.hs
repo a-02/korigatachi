@@ -91,7 +91,8 @@ data Resolve = Resolve
   , resolveLabels :: Seq.Seq (Word16, T.Text)
   , resolveCodegen :: Seq.Seq T.Text
   , resolveProgramCounter :: Word16
-  } deriving Show
+  }
+  deriving (Show)
 
 data Env = Env
   { logLevel :: LogLevel

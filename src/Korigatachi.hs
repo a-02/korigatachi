@@ -9,11 +9,13 @@ module Korigatachi where
 -- import Data.Vector.Sized qualified as Sized
 
 -- -- import Korigatachi.Assembly.CodeGen
+
+import Data.Sequence qualified as Seq
+import Korigatachi.Assembly.Demo qualified as K.Demo
 import Korigatachi.Monad qualified as K
-import qualified Korigatachi.Assembly.Demo as K.Demo
-import qualified Korigatachi.Resolve as K.Resolve
-import qualified Data.Sequence as Seq
-import qualified Korigatachi.Types as K
+import Korigatachi.Resolve qualified as K.Resolve
+import Korigatachi.Types qualified as K
+
 -- import Korigatachi.Types
 
 import Text.Show.Pretty qualified as Pretty
@@ -30,8 +32,7 @@ korigatachi = do
       K.liftIO $ Pretty.pPrint res
   _ <-
     K.runRWIT prog (K.Env K.Warn) (K.Assemble Seq.empty)
-      
-      
+
   -- let
   --   bin = ByteString.pack $ Sized.toList atr.rom.memory4k
   -- ByteString.writeFile "start.bin" bin

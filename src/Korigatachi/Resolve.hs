@@ -32,7 +32,7 @@ resolve :: K.Hane K.Assemble K.Resolve ()
 resolve = K.do
   (K.Assemble statements) <- K.get
   -- Neat trick!
-  K.put $ 
+  K.put $
     K.Resolve
       { K.resolveStatements = statements
       , K.resolveLabels = Seq.empty
@@ -40,8 +40,7 @@ resolve = K.do
       , K.resolveProgramCounter = 0
       }
   let
-
-    indexedStatements = Seq.zip (Seq.fromList [(0 :: Int) ..65535]) statements
+    indexedStatements = Seq.zip (Seq.fromList [(0 :: Int) .. 65535]) statements
 
     resolveCodegenHane :: K.Statement -> K.Hane K.Resolve K.Resolve ()
     resolveCodegenHane statement = K.do

@@ -4,9 +4,9 @@
 module Korigatachi.Assembly.Instruction where
 
 import Control.Applicative
-import Data.Maybe (fromMaybe)
 import Control.Monad ((>=>))
 import Data.Attoparsec.Text qualified as Attoparsec
+import Data.Maybe (fromMaybe)
 import Data.Text qualified as T
 import Korigatachi.Assembly.Control qualified as K
 import Korigatachi.Assembly.Instruction.TH

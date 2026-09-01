@@ -54,22 +54,22 @@ renderInstruction (sh, insList) =
   in
     case sh of
       K.JMP ->
-            [ "jmp :: T.Text -> K.Assembly ()"
-            , "jmp oprText ="
-            , "  let parseJMP = " <> parserAlternatives
-            , "      stripped = fromMaybe \"\" $ ((snd <$>) . T.uncons) >=> ((fst <$>) . T.unsnoc) $ oprText"
-            , "      firstChar = snd <$> T.unsnoc oprText"
-            , "      lastChar = fst <$> T.uncons oprText"
-            , "   in case Attoparsec.parseOnly parseJMP oprText of"
-            , "        Left _ -> K.log K.Warn (\"Failed to parse operand: \" <> oprText)"
-            , "        Right (K.Label _ lb) ->"
-            , "          if (firstChar == Just \'(\') && (lastChar == Just \')\')"
-            , "          then"
-            , "            K.append $ K.Instruct K." <> (T.show sh) <> " (K.Label [K.LabelIndirect] stripped)"
-            , "          else"
-            , "            K.append $ K.Instruct K." <> (T.show sh) <> " (K.Label [K.LabelAbsolute] lb)"
-            , "        Right parsedOpr -> K.append $ K.Instruct K." <> (T.show sh) <> " parsedOpr"
-            ]
+        [ "jmp :: T.Text -> K.Assembly ()"
+        , "jmp oprText ="
+        , "  let parseJMP = " <> parserAlternatives
+        , "      stripped = fromMaybe \"\" $ ((snd <$>) . T.uncons) >=> ((fst <$>) . T.unsnoc) $ oprText"
+        , "      firstChar = snd <$> T.unsnoc oprText"
+        , "      lastChar = fst <$> T.uncons oprText"
+        , "   in case Attoparsec.parseOnly parseJMP oprText of"
+        , "        Left _ -> K.log K.Warn (\"Failed to parse operand: \" <> oprText)"
+        , "        Right (K.Label _ lb) ->"
+        , "          if (firstChar == Just \'(\') && (lastChar == Just \')\')"
+        , "          then"
+        , "            K.append $ K.Instruct K." <> (T.show sh) <> " (K.Label [K.LabelIndirect] stripped)"
+        , "          else"
+        , "            K.append $ K.Instruct K." <> (T.show sh) <> " (K.Label [K.LabelAbsolute] lb)"
+        , "        Right parsedOpr -> K.append $ K.Instruct K." <> (T.show sh) <> " parsedOpr"
+        ]
       _ ->
         if hasArity
           then
