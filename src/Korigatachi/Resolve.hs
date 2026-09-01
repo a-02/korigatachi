@@ -65,7 +65,8 @@ resolve = K.do
                       resolveStatements
                         Seq.|> (K.Instruct sh res)
                   }
-            _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr}
+            _ -> K.modify $ \rsv@(K.Resolve {..}) ->
+              rsv {K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr}
         _ -> pure ()
   void $ traverse resolveStatement statements
   pure ()
@@ -77,33 +78,34 @@ resolve = K.do
 --
 -- We need to implement the special Relative Addressing behavior. Well. I do.
 
+-- | Weird bug this introduces: We can only refer to labels in the past. Oops.
 resolveLabel :: Seq.Seq (Word16, T.Text) -> [K.LabelAddressing] -> T.Text -> K.Hane K.Resolve K.Resolve K.Operand
-resolveLabel labels labelAddressing toResolve =
+resolveLabel labels labelAddressing toResolve = K.do
+  pc <- K.resolveProgramCounter <$> K.get
   let
     found = Seq.lookup 0 $ Seq.filter (\(_, lb) -> lb == toResolve) labels
-  in
-    case (found, labelAddressing) of
-      (Nothing, _) -> K.do
-        K.log K.Warn $ "Unrecognized label: " <> toResolve
-        pure $ K.Label [] ""
-      (_, []) -> K.do
-        K.log K.Warn "Missing label addressing modes."
-        pure $ K.Label [] "Missing label addressing modes. Check the logs."
-      (Just (addr, _), (a : _)) ->
-        -- go away
-        pure $ reifyLabel a addr
+  case (found, labelAddressing) of
+    (Nothing, _) -> K.do
+      K.log K.Warn $ "Unrecognized label: " <> toResolve
+      pure $ K.Label [] ""
+    (_, []) -> K.do
+      K.log K.Warn "Missing label addressing modes."
+      pure $ K.Label [] "Missing label addressing modes. Check the logs."
+    (Just (addr, _), (labelAddrMode : _)) ->
+      -- go away
+      pure $ reifyLabel labelAddrMode pc addr
 
 -- | TODO: Better name!
-reifyLabel :: K.LabelAddressing -> Word16 -> K.Operand
-reifyLabel la w16 =
+reifyLabel :: K.LabelAddressing -> Word16 -> Word16 -> K.Operand
+reifyLabel la pc addr =
   let
-    (hh, ll) = splitWord16 w16
+    (hh, ll) = splitWord16 addr
+    diff = fromIntegral $ addr - pc -- How far back are we going?
   in
     case la of
       K.LabelAbsolute -> K.Absolute hh ll
-      K.LabelRelative -> K.Relative ll
+      K.LabelRelative -> K.Relative diff
       K.LabelIndirect -> K.Indirect hh ll
-      K.LabelZeroPage -> K.ZeroPage ll
 
 renderStatement :: K.Statement -> T.Text
 renderStatement = \case
@@ -180,4 +182,3 @@ labelAddressingModeProgramCount = \case
   K.LabelIndirect -> 2
   K.LabelRelative -> 1
   K.LabelAbsolute -> 2
-  K.LabelZeroPage -> 1

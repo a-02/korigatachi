@@ -4,5 +4,4 @@ data LabelAddressing
   = LabelIndirect
   | LabelRelative
   | LabelAbsolute
-  | LabelZeroPage
   deriving (Eq, Ord, Show)

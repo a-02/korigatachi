@@ -47,7 +47,7 @@ renderInstruction (sh, insList) =
     addressingModes = K.addressingMode <$> insList
     labelAddressingModes =
       (\x -> "[" <> x <> "]") . T.intercalate "," $
-        ("K.Label" <>) <$> addressingModes `intersect` ["ZeroPage", "Relative", "Absolute", "Indirect"]
+        ("K.Label" <>) <$> addressingModes `intersect` ["Relative", "Absolute", "Indirect"]
     hasArity = foldl1 (||) $ addressingModeArity <$> addressingModes
     parseFnName = "parse" <> (T.show sh)
     parserAlternatives = foldMap (\addrMode -> "parse" <> addrMode <> " <|> ") addressingModes <> "parseLabel"
