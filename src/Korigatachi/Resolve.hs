@@ -18,7 +18,7 @@ import Data.Sequence qualified as Seq
 -- import Data.Word (Word16)
 -- import Korigatachi.Control qualified as K
 
-import Data.Foldable (traverse_)
+import Data.Foldable (toList, traverse_)
 import Data.Text qualified as T
 import Data.Word (Word16)
 import Korigatachi.Assembly.Operand (splitWord16)
@@ -32,6 +32,7 @@ resolve :: K.Hane K.Assemble K.Resolve ()
 resolve = K.do
   (K.Assemble statements) <- K.get
   -- Neat trick!
+  K.log K.Info "Pass 1 of 4 completed."
   K.put $
     K.Resolve
       { K.resolveStatements = statements
@@ -67,8 +68,15 @@ resolve = K.do
             _ -> pure ()
         _ -> pure ()
 
-  traverse_ (resolveCodegenHane >> resolveTopLevelLabelHane) statements -- Technically, this is Pass 2.
+  traverse_ resolveCodegenHane statements -- Technically, this is Pass 2.
+  K.log K.Info "Pass 2 of 4 completed."
+  traverse_ resolveTopLevelLabelHane statements -- Technically, this is Pass 3.
+  K.log K.Info "Pass 3 of 4 completed."
   traverse_ (uncurry resolveStatementsHane) indexedStatements -- Technically, this is Pass 4.
+  K.log K.Info "Pass 4 of 4 completed."
+  assembly <- K.resolveCodegen <$> K.get
+  K.codeGen $ T.unlines $ toList assembly
+  K.log K.Info "Codegen written."
   pure ()
 
 -- | Refers to labels in the past AND future!
@@ -107,8 +115,8 @@ renderStatement :: K.Statement -> T.Text
 renderStatement = \case
   K.Org w16 -> "  org $" <> (T.pack $ w16 ^. K.hex16)
   K.Word w16 -> "  .word $" <> (T.pack $ w16 ^. K.hex16)
-  K.Processor processor -> "  processor" <> processor
-  K.Include include -> "  include" <> include
+  K.Processor processor -> "  processor " <> processor
+  K.Include include -> "  include " <> include
   K.TopLevelLabel label -> label
   K.Instruct short opr -> "  " <> (T.toLower $ T.show short) <> " " <> (T.pack $ operandToString opr)
 

@@ -70,6 +70,7 @@ library
         Korigatachi.Assembly.Operand
         Korigatachi.Atari.Model
         Korigatachi.Atari.Types
+        Korigatachi.Bin
         Korigatachi.Control
         Korigatachi.Monad
         Korigatachi.Resolve

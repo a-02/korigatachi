@@ -57,7 +57,8 @@ renderInstruction (sh, insList) =
         [ "jmp :: T.Text -> K.Assembly ()"
         , "jmp oprText ="
         , "  let parseJMP = " <> parserAlternatives
-        , "      stripped = fromMaybe \"\" $ ((snd <$>) . T.uncons) >=> ((fst <$>) . T.unsnoc) $ oprText"
+        , -- Aha. Aaaaha.
+          "      stripped = fromMaybe \"\" $ ((snd <$>) . T.uncons) >=> ((fst <$>) . T.unsnoc) $ oprText"
         , "      firstChar = snd <$> T.unsnoc oprText"
         , "      lastChar = fst <$> T.uncons oprText"
         , "   in case Attoparsec.parseOnly parseJMP oprText of"

@@ -54,7 +54,7 @@ class IndexedMonad m where
 (>>=) :: IndexedMonad m => m i j a -> (a -> m j k b) -> m i k b
 (>>=) = ixbind
 
--- | ahahahahaha
+-- | There is something terribly wrong with this definition.
 (>>) :: IndexedMonad m => m i j a -> m j k b -> m i k b
 (>>) = (. const) . ixbind
 

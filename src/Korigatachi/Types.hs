@@ -14,6 +14,7 @@ module Korigatachi.Types
   , Katteyomi (..)
   , Assemble (..)
   , Resolve (..)
+  , Bin (..)
   , Env (..)
   , LogLevel (..)
   , BaseRepresentation (..)
@@ -22,6 +23,7 @@ module Korigatachi.Types
   )
 where
 
+import Data.ByteString qualified as BS
 import Data.Sequence qualified as Seq
 import Data.Text qualified as T
 import Data.Word (Word16, Word8)
@@ -92,6 +94,10 @@ data Resolve = Resolve
   , resolveCodegen :: Seq.Seq T.Text
   , resolveProgramCounter :: Word16
   }
+  deriving (Show)
+
+data Bin = Bin
+  {binOutput :: BS.ByteString}
   deriving (Show)
 
 data Env = Env

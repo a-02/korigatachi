@@ -1,3 +1,6 @@
+a.out
 korigatachi.log
 dist-newstyle/
 .stack-work
+*.asm
+*.bin
