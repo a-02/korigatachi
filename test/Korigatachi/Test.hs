@@ -1,15 +1,53 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE QualifiedDo #-}
 
 module Korigatachi.Test where
 
 import Data.Attoparsec.Text qualified as Attoparsec
 import Test.Tasty
 import Test.Tasty.HUnit qualified as HU
+import Test.Tasty.Golden qualified as Golden
 
 import Data.Either (isLeft)
 import Korigatachi.Assembly.Operand qualified as K
 import Korigatachi.Types qualified as K.Types
+import Data.Sequence qualified as Seq
+import Korigatachi.Assembly.Demo qualified as K.Demo
+import Korigatachi.Bin qualified as K.Bin
+import Korigatachi.Monad qualified as K
+import Korigatachi.Resolve qualified as K.Resolve
+import Korigatachi.Types qualified as K
+
+-- import Korigatachi.Types
+
+import Data.ByteString qualified as BS
+import Data.ByteString.Lazy qualified as BSL
+import qualified Data.Text.IO.Utf8 as Text.IO.Utf8
+
+demoByteString :: IO ()
+demoByteString = do
+  let
+    prog = K.do
+      K.Demo.sample
+      K.Resolve.resolve
+      K.Bin.bin
+      (K.Bin bs) <- K.get
+      K.ixpure bs
+  (bin,_,_) <- (K.runRWIT prog (K.Env K.Warn) (K.Assemble Seq.empty))
+  BS.writeFile "golden/golden.bin" bin
+
+demoFile :: IO ()
+demoFile = do
+  let
+    prog = K.do
+      K.Demo.sample
+      K.Resolve.resolve
+      K.Bin.bin
+  (_,_,kty) <-
+    K.runRWIT prog (K.Env K.Warn) (K.Assemble Seq.empty)
+  Text.IO.Utf8.writeFile "golden/golden.asm" kty.codegen
 
 testKorigatachi :: IO ()
 testKorigatachi = defaultMain tests
@@ -20,6 +58,26 @@ tests =
     "Korigatachi.Test"
     [ parserUnitTests
     , parserInternalsUnitTests
+    , parserGoldenTests
+    ]
+
+hexDump :: FilePath -> FilePath
+hexDump proc = "<(xxd " <> proc <> ")"
+
+parserGoldenTests :: TestTree
+parserGoldenTests =
+  testGroup
+    "Parser GOLDEN Tests"
+    [ Golden.goldenVsFileDiff "Thin Red Line - Binary Golden"
+        (\ref new -> ["diff", "-yib", hexDump ref, hexDump new])
+        "golden/thinredline.bin"
+        "golden/golden.bin"
+        demoByteString
+    , Golden.goldenVsFileDiff "Thin Red Line - Binary Golden"
+        (\ref new -> ["diff", "-yib", ref, new])
+        "golden/thinredline.asm"
+        "golden/thinredline_output.asm"
+        demoFile
     ]
 
 -- | Testing individual parser cases.

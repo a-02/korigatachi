@@ -158,7 +158,33 @@ signed :: Num a => Attoparsec.Parser a -> Attoparsec.Parser a
 signed p = (negate <$> (Attoparsec.char '-' *> p)) <|> p
 
 parseWord8 :: Attoparsec.Parser Word8
-parseWord8 = fromIntegral <$> parseWord16
+parseWord8 = signed $ 
+  do
+    baseRep <- parseBaseRepresentation
+    case baseRep of
+      K.Hexadecimal -> do
+        nibbles <- reverse <$> Attoparsec.many1' hexDigit
+        case length nibbles > 2 of
+          True -> fail "No way a hexadecimal Word8 has more than two characters."
+          False ->
+            pure . getIor . foldMap Ior $ zipWith shiftNibble [0 ..] nibbles
+      K.Octal -> do
+        triades <- reverse <$> Attoparsec.many' octalDigit
+        case (null triades, length triades > 3) of
+        -- still a weird bug here. 255 in octal is 377. needs a check if the last --character is greater than 3.
+          (True, _) ->
+            pure 0 -- Gets around a single "0" being parsed as the start of an octal instead of the number zero.
+          (_, True) ->
+            fail "No way an octal Word8 has more than three characters."
+          (_,_) -> -- No, I don't care about the (True, True) case. Please quit asking.
+            pure . getIor . foldMap Ior $ zipWith shiftTriade [0 ..] triades
+      K.Binary -> do
+        bits <- reverse <$> Attoparsec.many1' binaryDigit
+        case length bits > 8 of
+          True -> fail "No way a binary Word8 has more than eight bits."
+          False ->
+            pure . getIor . foldMap Ior $ zipWith shiftBinary [0 ..] bits
+      K.Decimal -> Attoparsec.decimal
 
 parseWord16 :: Attoparsec.Parser Word16
 parseWord16 = signed $
@@ -172,7 +198,7 @@ parseWord16 = signed $
         triades <- reverse <$> Attoparsec.many' octalDigit
         if null triades
           then
-            pure 0 -- Gets around a single "0" being parsed as the start of an octal instead of the number zero.
+            pure 0 -- Gets around a single "0" being parsed as the, hey, I already wrote this comment!
           else
             pure . getIor . foldMap Ior $ zipWith shiftTriade [0 ..] triades
       K.Binary -> do

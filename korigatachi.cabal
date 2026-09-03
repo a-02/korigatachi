@@ -164,4 +164,7 @@ test-suite korigatachi-test
         tasty-smallcheck,
         tasty-quickcheck,
         tasty-program,
+        text,
+        bytestring,
+        containers,
         korigatachi
