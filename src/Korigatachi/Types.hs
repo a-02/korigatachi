@@ -60,7 +60,6 @@ data Statement
   deriving (Show)
 
 -- -- | From the Japanese for "congealed shape". The monad to rule them all.
--- type Korigatachi a = RWIT Env Katteyomi IO Atari Atari a
 
 -- | There is death in the Hane.
 type Hane start end return = RWIT Env Katteyomi IO start end return

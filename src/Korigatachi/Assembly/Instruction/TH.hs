@@ -4,7 +4,7 @@
 
 module Korigatachi.Assembly.Instruction.TH where
 
-import Data.List (intersect)
+import Data.List (intersect, nub, sortBy)
 import Data.Map qualified as Map
 import Data.Text qualified as T
 import Korigatachi.Atari.Model qualified as K
@@ -40,11 +40,29 @@ addressingModeArity = \case
   "Label" -> True
   _ -> False
 
+addressingModePrecedence :: T.Text -> Int
+addressingModePrecedence = \case
+  "Accumulator" -> 13
+  "Implied" -> 12
+  "Immediate" -> 11
+  "IndirectX" -> 1
+  "IndirectY" -> 2
+  "Relative" -> 5
+  "ZeroPage" -> 6
+  "ZeroPageX" -> 3
+  "ZeroPageY" -> 4
+  "Absolute" -> 7
+  "AbsoluteX" -> 8
+  "AbsoluteY" -> 9
+  "Indirect" -> 10
+  "Label" -> maxBound
+  _ -> maxBound
+
 renderInstruction :: (K.Shorthand, [K.Instruction]) -> [T.Text]
 renderInstruction (sh, insList) =
   let
     lowercased = T.toLower $ T.show sh
-    addressingModes = K.addressingMode <$> insList
+    addressingModes = sortBy comparePrecedence $ K.addressingMode <$> insList
     labelAddressingModes =
       (\x -> "[" <> x <> "]") . T.intercalate "," $
         ("K.Label" <>) <$> addressingModes `intersect` ["Relative", "Absolute", "Indirect"]
@@ -74,7 +92,8 @@ renderInstruction (sh, insList) =
       _ ->
         if hasArity
           then
-            [ lowercased <> " :: T.Text -> K.Assembly ()"
+            [ "-- | " <> (T.unlines . nub $ (("-- " <>) . K.description) <$> insList)
+            , lowercased <> " :: T.Text -> K.Assembly ()"
             , lowercased <> " oprText ="
             , "  let " <> parseFnName <> " = " <> parserAlternatives
             , "   in case Attoparsec.parseOnly " <> parseFnName <> " oprText of"
@@ -87,3 +106,6 @@ renderInstruction (sh, insList) =
             [ lowercased <> " :: K.Assembly ()"
             , lowercased <> " = K.append $ K.Instruct K." <> (T.show sh) <> " K.Implied"
             ]
+
+comparePrecedence :: T.Text -> T.Text -> Ordering
+comparePrecedence textA textB = (addressingModePrecedence textA) `compare` (addressingModePrecedence textB)

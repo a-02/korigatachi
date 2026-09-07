@@ -6,23 +6,13 @@
 
 module Korigatachi.Assembly.Operand where
 
--- attoparsec
 import Data.Attoparsec.Text qualified as Attoparsec
 
--- base
 import Control.Applicative
 import Control.Monad (void)
 import Data.Bits
 import Data.Char (ord)
 import Data.Word (Word16, Word8)
-
--- bytestring
-
--- optics
-
--- korigatachi
-
-import Data.Text qualified as T
 import Korigatachi.Types (Operand (..))
 import Korigatachi.Types qualified as K
 
@@ -33,78 +23,6 @@ splitWord16 w16 =
     hh = (w16 .&. 0xFF00) `rotateR` 8 -- move the top 8 bits to the bottom
   in
     (fromIntegral ll, fromIntegral hh)
-
--- operandToWord16 :: Operand -> K.Hane i i Word16
--- operandToWord16 = \case
---   Accumulator -> K.do
---     K.logErr "operandToWord16 called on valueless operand"
---     K.ixpure 0xFFFF
---   Implied -> K.do
---     K.logErr "operandToWord16 called on valueless operand"
---     K.ixpure 0xFFFF
---   Immediate w8 -> K.ixpure $ fromIntegral w8
---   IndirectX w8 -> K.ixpure $ fromIntegral w8
---   IndirectY w8 -> K.ixpure $ fromIntegral w8
---   Relative w8 -> K.ixpure $ fromIntegral w8
---   ZeroPage w8 -> K.ixpure $ fromIntegral w8
---   ZeroPageX w8 -> K.do
---     x <- K.query $ \a -> K.x . K.generalRegisters $ K.cpu a
---     K.ixpure $ fromIntegral (w8 + x)
---   ZeroPageY w8 -> K.do
---     y <- K.query $ \a -> K.y . K.generalRegisters $ K.cpu a
---     K.ixpure $ fromIntegral (w8 + y)
---   Absolute ll hh ->
---     let
---       low = fromIntegral ll
---       high = fromIntegral hh
---     in
---       K.ixpure $ high * 256 + low
---   AbsoluteX ll hh ->
---     let
---       low = fromIntegral ll
---       high = fromIntegral hh
---     in
---       K.do
---         x <- K.query $ \a -> K.x . K.generalRegisters $ K.cpu a
---         K.ixpure $ high * 256 + low + (fromIntegral x)
---   AbsoluteY ll hh ->
---     let
---       low = fromIntegral ll
---       high = fromIntegral hh
---     in
---       K.do
---         y <- K.query $ \a -> K.y . K.generalRegisters $ K.cpu a
---         K.ixpure $ high * 256 + low + (fromIntegral y)
---   Indirect ll hh ->
---     let
---       low = fromIntegral ll
---       high = fromIntegral hh
---     in
---       K.ixpure $ high * 256 + low
---   Label label -> K.do
---     romLabels <- K.query $ \a -> K.labels $ K.rom a
---     case filter (\(K.MemoryLabel tx _) -> tx == label) romLabels of
---       [] -> K.do
---         K.katteyomi ("unable to resolve label: " <> label) ""
---         K.ixpure 0xFFFF
---       ((K.MemoryLabel _ labelLocation) : _) -> K.ixpure labelLocation
-
-toAddressingMode :: Operand -> T.Text
-toAddressingMode = \case
-  Accumulator -> "Accumulator"
-  Implied -> "Implied"
-  Immediate _ -> "Immediate"
-  IndirectX _ -> "IndirectX"
-  IndirectY _ -> "IndirectY"
-  Relative _ -> "Relative"
-  ZeroPage _ -> "ZeroPage"
-  ZeroPageX _ -> "ZeroPageX"
-  ZeroPageY _ -> "ZeroPageY"
-  Absolute _ _ -> "Absolute"
-  AbsoluteX _ _ -> "AbsoluteX"
-  AbsoluteY _ _ -> "AbsoluteY"
-  Indirect _ _ -> "Indirect"
-  Label _ _ -> "Label"
 
 isOctalDigit :: Char -> Bool
 isOctalDigit c = let w = ord c in w >= 49 && w <= 55
@@ -157,8 +75,9 @@ parseBaseRepresentation =
 signed :: Num a => Attoparsec.Parser a -> Attoparsec.Parser a
 signed p = (negate <$> (Attoparsec.char '-' *> p)) <|> p
 
+-- | There's a lot of duplication between parseWord8 and parseWord16.
 parseWord8 :: Attoparsec.Parser Word8
-parseWord8 = signed $ 
+parseWord8 = signed $
   do
     baseRep <- parseBaseRepresentation
     case baseRep of
@@ -171,12 +90,13 @@ parseWord8 = signed $
       K.Octal -> do
         triades <- reverse <$> Attoparsec.many' octalDigit
         case (null triades, length triades > 3) of
-        -- still a weird bug here. 255 in octal is 377. needs a check if the last --character is greater than 3.
+          -- still a weird bug here. 255 in octal is 377. needs a check if the last character is greater than 3.
           (True, _) ->
             pure 0 -- Gets around a single "0" being parsed as the start of an octal instead of the number zero.
           (_, True) ->
             fail "No way an octal Word8 has more than three characters."
-          (_,_) -> -- No, I don't care about the (True, True) case. Please quit asking.
+          (_, _) ->
+            -- No, I don't care about the (True, True) case. Please quit asking.
             pure . getIor . foldMap Ior $ zipWith shiftTriade [0 ..] triades
       K.Binary -> do
         bits <- reverse <$> Attoparsec.many1' binaryDigit
@@ -249,25 +169,25 @@ parseZeroPageY = do
 
 parseAbsolute :: Attoparsec.Parser Operand
 parseAbsolute = do
-  (ll, hh) <- splitWord16 <$> parseWord16
+  (hh, ll) <- splitWord16 <$> parseWord16
   pure $ Absolute ll hh
 
 parseAbsoluteX :: Attoparsec.Parser Operand
 parseAbsoluteX = do
-  (ll, hh) <- splitWord16 <$> parseWord16
+  (hh, ll) <- splitWord16 <$> parseWord16
   void $ Attoparsec.string ",x"
   pure $ AbsoluteX ll hh
 
 parseAbsoluteY :: Attoparsec.Parser Operand
 parseAbsoluteY = do
-  (ll, hh) <- splitWord16 <$> parseWord16
+  (hh, ll) <- splitWord16 <$> parseWord16
   void $ Attoparsec.string ",y"
   pure $ AbsoluteY ll hh
 
 parseIndirect :: Attoparsec.Parser Operand
 parseIndirect = do
   void $ Attoparsec.string "("
-  (ll, hh) <- splitWord16 <$> parseWord16
+  (hh, ll) <- splitWord16 <$> parseWord16
   void $ Attoparsec.char ')'
   pure $ Indirect ll hh
 

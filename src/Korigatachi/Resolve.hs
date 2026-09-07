@@ -47,33 +47,30 @@ resolve = K.do
     resolveCodegenHane statement = K.do
       K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveCodegen = resolveCodegen Seq.|> renderStatement statement}
 
-    resolveTopLevelLabelHane :: K.Statement -> K.Hane K.Resolve K.Resolve ()
-    resolveTopLevelLabelHane statement = K.do
+    resolveTopLevelLabelHane :: Int -> K.Statement -> K.Hane K.Resolve K.Resolve ()
+    resolveTopLevelLabelHane statementIndex statement = K.do
       case statement of
-        K.Org w16 -> K.modify $ \rsv -> rsv {K.resolveProgramCounter = w16}
+        K.Org w16 -> K.modify $ \rsv -> rsv {K.resolveProgramCounter = w16 + 1} -- Why do I need to do this?
         K.TopLevelLabel label -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveLabels = resolveLabels Seq.|> (resolveProgramCounter, label)}
-        K.Instruct _ opr -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr}
         K.Word _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 2}
-        _ -> pure ()
-
-    resolveStatementsHane :: Int -> K.Statement -> K.Hane K.Resolve K.Resolve ()
-    resolveStatementsHane statementIndex statement = K.do
-      case statement of
         K.Instruct sh opr ->
           case opr of
             K.Label labelAddrModes lb -> K.do
               labels <- K.resolveLabels <$> K.get
               res <- resolveLabel labels labelAddrModes lb
-              K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveStatements = Seq.update statementIndex (K.Instruct sh res) resolveStatements}
-            _ -> pure ()
+              K.modify $ \rsv@(K.Resolve {..}) ->
+                rsv
+                  { K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr
+                  , K.resolveStatements = Seq.update statementIndex (K.Instruct sh res) resolveStatements
+                  }
+            _ ->
+              K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr}
         _ -> pure ()
 
   traverse_ resolveCodegenHane statements -- Technically, this is Pass 2.
-  K.log K.Info "Pass 2 of 4 completed."
-  traverse_ resolveTopLevelLabelHane statements -- Technically, this is Pass 3.
-  K.log K.Info "Pass 3 of 4 completed."
-  traverse_ (uncurry resolveStatementsHane) indexedStatements -- Technically, this is Pass 4.
-  K.log K.Info "Pass 4 of 4 completed."
+  K.log K.Info "Pass 2 of 3 completed."
+  traverse_ (uncurry resolveTopLevelLabelHane) indexedStatements -- Technically, this is Pass 3.
+  K.log K.Info "Pass 3 of 3 completed."
   assembly <- K.resolveCodegen <$> K.get
   K.codeGen $ T.unlines $ toList assembly
   K.log K.Info "Codegen written."
@@ -92,7 +89,8 @@ resolveLabel labels labelAddressing toResolve = K.do
     (_, []) -> K.do
       K.log K.Warn "Missing label addressing modes."
       pure $ K.Label [] ""
-    (Just (addr, _), (labelAddrMode : _)) ->
+    (Just (addr, _), (labelAddrMode : _)) -> K.do
+      K.log K.Info $ "Resolving label: " <> toResolve <> " | PC=" <> T.show pc <> " | LabelAddress=" <> T.show addr
       pure $ reifyLabel labelAddrMode pc addr
 
 -- | TODO: Better name!
@@ -104,12 +102,13 @@ reifyLabel la pc addr =
     intAddr = fromIntegral addr
     intPC :: Int
     intPC = fromIntegral pc
-    diff = fromIntegral $ intPC - intAddr -- This works cause of literal overflow.
+    diff = fromIntegral $ intAddr - (intPC + 2) -- This works cause of literal overflow.
+    -- The "plus 2" is because we're counting the difference AFTER the branch.
   in
     case la of
-      K.LabelAbsolute -> K.Absolute hh ll
+      K.LabelAbsolute -> K.Absolute ll hh
       K.LabelRelative -> K.Relative diff
-      K.LabelIndirect -> K.Indirect hh ll
+      K.LabelIndirect -> K.Indirect ll hh
 
 renderStatement :: K.Statement -> T.Text
 renderStatement = \case
@@ -186,10 +185,3 @@ labelAddressingModeProgramCount = \case
   K.LabelIndirect -> 2
   K.LabelRelative -> 1
   K.LabelAbsolute -> 2
-
--- Indirect & Absolute can only be confused for each other with JMP ($4C and $6C).
--- Disambiguating between the two would require a special syntax for "Indirect Labels".
--- Something like "jmp (Start)". Which might be cool. And possibly useful.
--- But not particularly fun to implement. Maybe something could be done with the TH implementation of JMP?
--- Failed parses of Indirect that start with '(' get parsed down to Label [LabelIndirect] (tx :: T.Text).
--- It'd require breaking apart the TH parseDecs call so much though. Just for this one case.

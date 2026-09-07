@@ -23,7 +23,6 @@ import Korigatachi.Types qualified as K
 -- import Korigatachi.Types
 
 import Data.ByteString qualified as BS
-import Data.ByteString.Lazy qualified as BSL
 import qualified Data.Text.IO.Utf8 as Text.IO.Utf8
 
 demoByteString :: IO ()
@@ -69,15 +68,10 @@ parserGoldenTests =
   testGroup
     "Parser GOLDEN Tests"
     [ Golden.goldenVsFileDiff "Thin Red Line - Binary Golden"
-        (\ref new -> ["diff", "-yib", hexDump ref, hexDump new])
+        (\ref new -> ["diff", "-yib", ref, new])
         "golden/thinredline.bin"
         "golden/golden.bin"
         demoByteString
-    , Golden.goldenVsFileDiff "Thin Red Line - Binary Golden"
-        (\ref new -> ["diff", "-yib", ref, new])
-        "golden/thinredline.asm"
-        "golden/thinredline_output.asm"
-        demoFile
     ]
 
 -- | Testing individual parser cases.

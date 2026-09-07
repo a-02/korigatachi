@@ -37,7 +37,7 @@ korigatachi = do
       (K.Bin bs) <- K.get
       K.ixpure bs
   (bs, _, kty) <-
-    K.runRWIT prog (K.Env K.Warn) (K.Assemble Seq.empty)
+    K.runRWIT prog (K.Env K.Test) (K.Assemble Seq.empty)
   Text.IO.Utf8.writeFile "korigatachi.log" kty.logs
   Text.IO.Utf8.writeFile "start.asm" kty.codegen
   ByteString.writeFile "start.bin" bs

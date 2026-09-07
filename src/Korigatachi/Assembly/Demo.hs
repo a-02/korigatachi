@@ -48,7 +48,7 @@ start = K.do
 clearMem :: Assembly ()
 clearMem = K.do
   label "ClearMem"
-  sta "(0,X)"
+  sta "0,X" -- I wrote this wrong and spent hours trying to track down the bug this caused.
   dex
   bne "ClearMem"
   lda "#$00"
