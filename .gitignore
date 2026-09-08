@@ -2,5 +2,6 @@ a.out
 korigatachi.log
 dist-newstyle/
 .stack-work
+.hiedb
 *.asm
 *.bin
