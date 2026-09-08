@@ -1,26 +1,25 @@
-{-# LANGUAGE BinaryLiterals #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ImportQualifiedPost #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QualifiedDo #-}
 
-{- HLINT ignore "Use $>" -}
+module Main where
 
-module Korigatachi.Assembly.Demo where
+import Control.Monad (void)
 
 import Korigatachi.Assembly.Control
 import Korigatachi.Assembly.Instruction
 import Korigatachi.Assembly.Pattern
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types
+import Korigatachi qualified as Korigatachi
 
-sample :: Assembly ()
-sample = K.do
+main :: IO ()
+main = do
+  void $ Korigatachi.render thinRedLine
+  void $ Korigatachi.assemble thinRedLine
+
+thinRedLine :: Assembly ()
+thinRedLine = K.do
   preamble
   org 0xF000
   start

@@ -28,14 +28,13 @@ library
         Korigatachi.Atari.Types
         Korigatachi.Bin
         Korigatachi.Control
+        Korigatachi.Monad
         Korigatachi.Resolve
         Korigatachi.Resolve.Types
         Korigatachi.Types
 
     other-modules:
         Korigatachi.Atari.Model
-        Korigatachi.Monad
-        Korigatachi.Assembly.Demo
         Korigatachi.Assembly.Instruction.TH
 
     -- other-extensions:
@@ -76,6 +75,26 @@ library
 --     hs-source-dirs:   app
 
 --     default-language: Haskell2010
+
+executable thinredline-example
+    import:           warnings
+    main-is:          examples/ThinRedLine.hs
+    default-extensions:
+        ImportQualifiedPost
+    build-depends:
+        base,
+        korigatachi
+    default-language: Haskell2010
+
+executable clock-example
+    import:           warnings
+    main-is:          examples/Clock.hs
+    default-extensions:
+        ImportQualifiedPost
+    build-depends:
+        base,
+        korigatachi
+    default-language: Haskell2010
 
 test-suite korigatachi-test
     import:           warnings
