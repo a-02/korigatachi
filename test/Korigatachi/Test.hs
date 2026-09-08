@@ -15,6 +15,7 @@ import Korigatachi.Assembly.Operand qualified as K
 import Korigatachi.Types qualified as K.Types
 import Data.Sequence qualified as Seq
 import Korigatachi.Bin qualified as K.Bin
+import Korigatachi.Control
 import Korigatachi.Monad qualified as K
 import Korigatachi.Resolve qualified as K.Resolve
 import Korigatachi.Types qualified as K
@@ -358,10 +359,8 @@ mainLoop :: K.Assembly ()
 mainLoop = K.do
   label "MainLoop"
   lda "#2"
-  sta VSYNC -- TODO: Use this to showcase a replicator.
-  sta WSYNC
-  sta WSYNC
-  sta WSYNC
+  sta VSYNC
+  rep 3 (sta WSYNC)
   lda "#43"
   sta TIM64T
   lda "#0"

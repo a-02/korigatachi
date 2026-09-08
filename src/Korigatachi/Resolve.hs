@@ -53,6 +53,7 @@ resolve = K.do
         K.Org w16 -> K.modify $ \rsv -> rsv {K.resolveProgramCounter = w16 + 1} -- Why do I need to do this?
         K.TopLevelLabel label -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveLabels = resolveLabels Seq.|> (resolveProgramCounter, label)}
         K.Word _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 2}
+        K.Byte _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 1}
         K.Instruct sh opr ->
           case opr of
             K.Label labelAddrModes lb -> K.do
@@ -114,6 +115,7 @@ renderStatement :: K.Statement -> T.Text
 renderStatement = \case
   K.Org w16 -> "  org $" <> (T.pack $ w16 ^. K.hex16)
   K.Word w16 -> "  .word $" <> (T.pack $ w16 ^. K.hex16)
+  K.Byte w8  -> "  .word $" <> (T.pack $ w8 ^. K.hex8)
   K.Processor processor -> "  processor " <> processor
   K.Include include -> "  include " <> include
   K.TopLevelLabel label -> label

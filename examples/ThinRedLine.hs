@@ -7,6 +7,7 @@ module Main where
 import Control.Monad (void)
 
 import Korigatachi.Assembly.Control
+import Korigatachi.Control
 import Korigatachi.Assembly.Instruction
 import Korigatachi.Assembly.Pattern
 import Korigatachi.Monad qualified as K
@@ -60,10 +61,8 @@ mainLoop :: Assembly ()
 mainLoop = K.do
   label "MainLoop"
   lda "#2"
-  sta VSYNC -- TODO: Use this to showcase a replicator.
-  sta WSYNC
-  sta WSYNC
-  sta WSYNC
+  sta VSYNC
+  rep 3 (sta WSYNC)
   lda "#43"
   sta TIM64T
   lda "#0"

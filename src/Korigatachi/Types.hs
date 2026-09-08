@@ -53,13 +53,12 @@ data Operand
 data Statement
   = Org Word16
   | Word Word16
+  | Byte Word8
   | Processor T.Text
   | Include T.Text
   | TopLevelLabel T.Text
   | Instruct Shorthand Operand
   deriving (Show)
-
--- -- | From the Japanese for "congealed shape". The monad to rule them all.
 
 -- | There is death in the Hane.
 type Hane start end return = RWIT Env Katteyomi IO start end return

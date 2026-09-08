@@ -34,6 +34,14 @@ clock = K.do
 
 -- This is a direct translation of Kirk Israel's "thin red line".
 
+-- RAM
+
+pattern TEMP = "$80"
+pattern SECS = "$82"
+pattern MINS = "$83"
+pattern HOURS = "$84"
+pattern JOYDEL = "$85"
+
 -- | The standard Atari 2600 start script.
 start :: Assembly ()
 start = K.do

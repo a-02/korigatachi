@@ -62,7 +62,7 @@ renderInstruction :: (K.Shorthand, [K.Instruction]) -> [T.Text]
 renderInstruction (sh, insList) =
   let
     lowercased = T.toLower $ T.show sh
-    addressingModes = sortBy comparePrecedence $ K.addressingMode <$> insList
+    addressingModes = nub $ sortBy comparePrecedence $ K.addressingMode <$> insList
     labelAddressingModes =
       (\x -> "[" <> x <> "]") . T.intercalate "," $
         ("K.Label" <>) <$> addressingModes `intersect` ["Relative", "Absolute", "Indirect"]
@@ -72,7 +72,8 @@ renderInstruction (sh, insList) =
   in
     case sh of
       K.JMP ->
-        [ "jmp :: T.Text -> K.Assembly ()"
+        [ "-- | Jump. "
+        , "jmp :: T.Text -> K.Assembly ()"
         , "jmp oprText ="
         , "  let parseJMP = " <> parserAlternatives
         , -- Aha. Aaaaha.

@@ -16,7 +16,7 @@ module Korigatachi.Assembly.Control where
 
 import Data.Sequence qualified as Seq
 import Data.Text qualified as T
-import Data.Word (Word16)
+import Data.Word (Word16, Word8)
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types qualified as K
 import Prelude hiding (and, read)
@@ -40,6 +40,9 @@ org = append . K.Org
 
 word :: Word16 -> K.Assembly ()
 word = append . K.Word
+
+byte :: Word8 -> K.Assembly ()
+byte = append . K.Byte
 
 label :: T.Text -> K.Assembly ()
 label = append . K.TopLevelLabel
