@@ -11,27 +11,21 @@
 
 module Korigatachi.Atari.Model where
 
--- containers
 import Data.Map.Strict qualified as Map
 
--- finite-typelits
 import Data.Finite (finite)
 
--- text
 import Data.Text qualified as T
 
--- sized-vector
 import Data.Vector.Sized ((//))
 import Data.Vector.Sized qualified as Sized
 
--- base
 
 import Data.Bits (Bits (bit, (.|.)), testBit)
 import Data.List as List
 import Data.Word (Word8)
 import Prelude hiding (break)
 
--- korigatachi
 import Korigatachi.Types
 
 -- | An Atari with nothing. Every register is 0'd out.

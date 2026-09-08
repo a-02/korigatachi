@@ -35,7 +35,7 @@ demoByteString = do
       (K.Bin bs) <- K.get
       K.ixpure bs
   (bin,_,_) <- (K.runRWIT prog (K.Env K.Warn) (K.Assemble Seq.empty))
-  BS.writeFile "golden/golden.bin" bin
+  BS.writeFile "test/golden/golden.bin" bin
 
 demoFile :: IO ()
 demoFile = do
@@ -46,7 +46,7 @@ demoFile = do
       K.Bin.bin
   (_,_,kty) <-
     K.runRWIT prog (K.Env K.Warn) (K.Assemble Seq.empty)
-  Text.IO.Utf8.writeFile "golden/golden.asm" kty.codegen
+  Text.IO.Utf8.writeFile "test/golden/golden.asm" kty.codegen
 
 testKorigatachi :: IO ()
 testKorigatachi = defaultMain tests
@@ -60,9 +60,7 @@ tests =
     , parserGoldenTests
     ]
 
-hexDump :: FilePath -> FilePath
-hexDump proc = "<(xxd " <> proc <> ")"
-
+-- | Does the assembler generate the expected output?
 parserGoldenTests :: TestTree
 parserGoldenTests =
   testGroup

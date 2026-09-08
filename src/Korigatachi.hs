@@ -22,7 +22,31 @@ import Korigatachi.Types qualified as K
 import Data.ByteString qualified as ByteString
 import Data.Text.IO.Utf8 qualified as Text.IO.Utf8
 import Text.Show.Pretty qualified as Pretty
+import qualified Data.Text as T
 
+-- | Render a Korigatachi program as assembly.
+render :: K.Assembly () -> IO T.Text
+render asm = do
+  let
+    prog = K.do
+      asm
+      K.Resolve.resolve
+  (_, _, kty) <-
+    K.runRWIT prog (K.Env K.Warn) (K.Assemble Seq.empty)
+  pure kty.codegen
+
+assembler :: K.Assembly () -> IO ByteString.ByteString
+assembler asm = do
+  let
+    prog = K.do
+      asm
+      K.Resolve.resolve
+      K.Bin.bin
+      K.get
+  ((K.Bin bs), _, _) <-
+    K.runRWIT prog (K.Env K.Warn) (K.Assemble Seq.empty)
+  pure bs
+  
 korigatachi :: IO ()
 korigatachi = do
   let

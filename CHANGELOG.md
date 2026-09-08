@@ -1,5 +1,5 @@
 # Revision history for korigatachi
 
-## 0.0.0 -- YYYY-mm-dd
+## 0.0.0 -- 2026-09-07
 
-* First version. Released on an unsuspecting world.
+* Does what I want it to.

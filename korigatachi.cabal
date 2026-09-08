@@ -22,21 +22,21 @@ library
     exposed-modules:
         Korigatachi
         Korigatachi.Assembly.Control
-        Korigatachi.Assembly.Demo
         Korigatachi.Assembly.Instruction
-        Korigatachi.Assembly.Instruction.TH
         Korigatachi.Assembly.Pattern
         Korigatachi.Assembly.Operand
-        Korigatachi.Atari.Model
         Korigatachi.Atari.Types
         Korigatachi.Bin
         Korigatachi.Control
-        Korigatachi.Monad
         Korigatachi.Resolve
         Korigatachi.Resolve.Types
         Korigatachi.Types
 
-    -- other-modules:
+    other-modules:
+        Korigatachi.Atari.Model
+        Korigatachi.Monad
+        Korigatachi.Assembly.Demo
+        Korigatachi.Assembly.Instruction.TH
 
     -- other-extensions:
 
@@ -61,21 +61,21 @@ library
     default-extensions:
         ImportQualifiedPost
 
-executable korigatachi
-    import:           warnings
+-- executable korigatachi
+--     import:           warnings
 
-    main-is:          Main.hs
+--     main-is:          Main.hs
 
-    default-extensions:
-        ImportQualifiedPost
+--     default-extensions:
+--         ImportQualifiedPost
 
-    build-depends:
-        base,
-        korigatachi
+--     build-depends:
+--         base,
+--         korigatachi
 
-    hs-source-dirs:   app
+--     hs-source-dirs:   app
 
-    default-language: Haskell2010
+--     default-language: Haskell2010
 
 test-suite korigatachi-test
     import:           warnings
