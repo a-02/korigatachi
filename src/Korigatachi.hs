@@ -4,13 +4,13 @@
 
 module Korigatachi where
 
+import Data.ByteString qualified as ByteString
 import Data.Sequence qualified as Seq
+import Data.Text qualified as T
 import Korigatachi.Bin qualified as K.Bin
 import Korigatachi.Monad qualified as K
 import Korigatachi.Resolve qualified as K.Resolve
 import Korigatachi.Types qualified as K
-import Data.ByteString qualified as ByteString
-import qualified Data.Text as T
 
 -- | Render a Korigatachi program as assembly.
 render :: K.Assembly () -> IO T.Text

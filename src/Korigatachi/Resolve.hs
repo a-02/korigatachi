@@ -52,6 +52,7 @@ resolve = K.do
       case statement of
         K.Org w16 -> K.modify $ \rsv -> rsv {K.resolveProgramCounter = w16 + 1} -- Why do I need to do this?
         K.TopLevelLabel label -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveLabels = resolveLabels Seq.|> (resolveProgramCounter, label)}
+        K.Long _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 4}
         K.Word _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 2}
         K.Byte _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 1}
         K.Instruct sh opr ->
@@ -82,17 +83,21 @@ resolveLabel :: Seq.Seq (Word16, T.Text) -> [K.LabelAddressing] -> T.Text -> K.H
 resolveLabel labels labelAddressing toResolve = K.do
   pc <- K.resolveProgramCounter <$> K.get
   let
+    (programCounterLow, programCounterHigh) = splitWord16 pc
     found = Seq.lookup 0 $ Seq.filter (\(_, lb) -> lb == toResolve) labels
-  case (found, labelAddressing) of
-    (Nothing, _) -> K.do
-      K.log K.Warn $ "Unrecognized label: " <> toResolve
-      pure $ K.Label [] ""
-    (_, []) -> K.do
-      K.log K.Warn "Missing label addressing modes."
-      pure $ K.Label [] ""
-    (Just (addr, _), (labelAddrMode : _)) -> K.do
-      K.log K.Info $ "Resolving label: " <> toResolve <> " | PC=" <> T.show pc <> " | LabelAddress=" <> T.show addr
-      pure $ reifyLabel labelAddrMode pc addr
+  case (toResolve == ".") of -- Special case for "current program counter" label.
+    True -> pure $ K.Absolute programCounterLow programCounterHigh
+    False ->
+      case (found, labelAddressing) of
+        (Nothing, _) -> K.do
+          K.log K.Warn $ "Unrecognized label: " <> toResolve
+          pure $ K.Label [] ""
+        (_, []) -> K.do
+          K.log K.Warn "Missing label addressing modes."
+          pure $ K.Label [] ""
+        (Just (addr, _), (labelAddrMode : _)) -> K.do
+          K.log K.Info $ "Resolving label: " <> toResolve <> " | PC=" <> T.show pc <> " | LabelAddress=" <> T.show addr
+          pure $ reifyLabel labelAddrMode pc addr
 
 -- | TODO: Better name!
 reifyLabel :: K.LabelAddressing -> Word16 -> Word16 -> K.Operand
@@ -114,8 +119,9 @@ reifyLabel la pc addr =
 renderStatement :: K.Statement -> T.Text
 renderStatement = \case
   K.Org w16 -> "  org $" <> (T.pack $ w16 ^. K.hex16)
+  K.Long w32 -> "  .long $" <> (T.pack $ w32 ^. K.hex32)
   K.Word w16 -> "  .word $" <> (T.pack $ w16 ^. K.hex16)
-  K.Byte w8  -> "  .word $" <> (T.pack $ w8 ^. K.hex8)
+  K.Byte w8 -> "  .byte $" <> (T.pack $ w8 ^. K.hex8)
   K.Processor processor -> "  processor " <> processor
   K.Include include -> "  include " <> include
   K.TopLevelLabel label -> label

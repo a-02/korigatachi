@@ -12,7 +12,7 @@ import Control.Applicative
 import Control.Monad (void)
 import Data.Bits
 import Data.Char (ord)
-import Data.Word (Word16, Word8)
+import Data.Word (Word16, Word32, Word8)
 import Korigatachi.Types (Operand (..))
 import Korigatachi.Types qualified as K
 
@@ -23,6 +23,24 @@ splitWord16 w16 =
     hh = (w16 .&. 0xFF00) `rotateR` 8 -- move the top 8 bits to the bottom
   in
     (fromIntegral ll, fromIntegral hh)
+
+splitWord32asWord8 :: Word32 -> (Word8, Word8, Word8, Word8)
+splitWord32asWord8 w32 =
+  let
+    ll = w32 .&. 0x000000FF
+    lh = (w32 .&. 0x0000FF00) `rotateR` 8
+    hl = (w32 .&. 0x00FF0000) `rotateR` 16
+    hh = (w32 .&. 0xFF000000) `rotateR` 24
+  in
+    (fromIntegral ll, fromIntegral lh, fromIntegral hl, fromIntegral hh)
+
+splitWord32asWord16 :: Word32 -> (Word16, Word16)
+splitWord32asWord16 w32 =
+  let
+    llll = w32 .&. 0x0000FFFF
+    hhhh = w32 .&. 0xFFFF0000 `rotateR` 16
+  in
+    (fromIntegral llll, fromIntegral hhhh)
 
 isOctalDigit :: Char -> Bool
 isOctalDigit c = let w = ord c in w >= 49 && w <= 55

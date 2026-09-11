@@ -17,7 +17,7 @@ import Data.List as List
 import Data.Map.Strict qualified as Map
 import Data.Text qualified as T
 import Data.Word (Word16, Word8)
-import Korigatachi.Assembly.Operand (splitWord16)
+import Korigatachi.Assembly.Operand qualified as K
 import Korigatachi.Atari.Model qualified as K
 import Korigatachi.Control qualified as K
 import Korigatachi.Monad qualified as K
@@ -32,16 +32,24 @@ bin = K.do
   let
     word12 :: Word16 -> Word16
     word12 = (.&. 0x0FFF)
-    splitWord w16 = let (ll, hh) = splitWord16 w16 in BS.pack [ll, hh]
+    splitWord w16 = let (ll, hh) = K.splitWord16 w16 in BS.pack [ll, hh]
+    splitLong w32 =
+      let (ll, lh, hl, hh) = K.splitWord32asWord8 w32 in BS.pack [ll, lh, hl, hh]
     genBinary :: K.Statement -> K.Hane K.Bin K.Bin ()
     genBinary statement = K.do
       case statement of
         K.Org w16 ->
           K.modify $ \bn@(K.Bin {..}) ->
             bn {K.binOutput = binOutput <> BS.replicate ((fromIntegral $ word12 w16) - BS.length binOutput) 0xFF}
+        K.Long w32 ->
+          K.modify $ \bn@(K.Bin {..}) ->
+            bn {K.binOutput = binOutput <> splitLong w32}
         K.Word w16 ->
           K.modify $ \bn@(K.Bin {..}) ->
             bn {K.binOutput = binOutput <> splitWord w16}
+        K.Byte w8 ->
+          K.modify $ \bn@(K.Bin {..}) ->
+            bn {K.binOutput = binOutput `BS.snoc` w8}
         K.Instruct sh opr ->
           K.modify $ \bn@(K.Bin {..}) ->
             bn {K.binOutput = binOutput <> (instructBinary sh opr)}

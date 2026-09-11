@@ -62,6 +62,9 @@ hex8 = to $ \w8 -> showHex w8 ""
 hex16 :: Getter Word16 String
 hex16 = to $ \w16 -> showHex w16 ""
 
+hex32 :: Getter Word32 String
+hex32 = to $ \w32 -> showHex w32 ""
+
 rep :: Word -> Hane i i () -> Hane i i ()
 rep i hane =
   case i of

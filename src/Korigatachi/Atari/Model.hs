@@ -20,7 +20,6 @@ import Data.Text qualified as T
 import Data.Vector.Sized ((//))
 import Data.Vector.Sized qualified as Sized
 
-
 import Data.Bits (Bits (bit, (.|.)), testBit)
 import Data.List as List
 import Data.Word (Word8)

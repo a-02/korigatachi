@@ -18,6 +18,7 @@ module Korigatachi.Types
   , Env (..)
   , LogLevel (..)
   , BaseRepresentation (..)
+  , Length (..)
   , module Atari.Types.Export
   , module Resolve.Types.Export
   )
@@ -26,7 +27,7 @@ where
 import Data.ByteString qualified as BS
 import Data.Sequence qualified as Seq
 import Data.Text qualified as T
-import Data.Word (Word16, Word8)
+import Data.Word (Word16, Word32, Word8)
 import GHC.Generics qualified as Generic
 import Korigatachi.Atari.Types as Atari.Types.Export
 import Korigatachi.Monad
@@ -52,8 +53,12 @@ data Operand
 
 data Statement
   = Org Word16
+  | Long Word32
   | Word Word16
   | Byte Word8
+  | LongLabel LabelAddressing T.Text
+  | WordLabel LabelAddressing T.Text
+  | ByteLabel LabelAddressing T.Text
   | Processor T.Text
   | Include T.Text
   | TopLevelLabel T.Text
@@ -114,3 +119,5 @@ instance Show LogLevel where
 
 data BaseRepresentation = Binary | Octal | Decimal | Hexadecimal
   deriving (Eq, Ord)
+
+data Length = DCByte | DCWord | DCLong
