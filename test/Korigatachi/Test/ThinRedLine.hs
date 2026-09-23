@@ -1,23 +1,28 @@
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE QualifiedDo #-}
 
-module Main where
+module Korigatachi.Test.ThinRedLine where
 
-import Control.Monad (void)
+import Data.Attoparsec.Text qualified as Attoparsec
+import Test.Tasty
+import Test.Tasty.HUnit qualified as HU
+import Test.Tasty.Golden qualified as Golden
 
-import Korigatachi.Assembly.Control
+import Data.Either (isLeft)
+import Korigatachi.Assembly.Operand qualified as K
+import Korigatachi.Types qualified as K.Types
+import Data.Sequence qualified as Seq
+import Korigatachi.Bin qualified as K.Bin
 import Korigatachi.Control
-import Korigatachi.Assembly.Pattern
 import Korigatachi.Monad qualified as K
+import Korigatachi.Resolve qualified as K.Resolve
+import Korigatachi.Types qualified as K
+import Korigatachi.Assembly.Control
+import Korigatachi.Assembly.Pattern
 import Korigatachi.Types
-import Korigatachi qualified as Korigatachi
 
-main :: IO ()
-main = do
-  void $ Korigatachi.render thinRedLine
-  void $ Korigatachi.assemble thinRedLine
-
-thinRedLine :: Assembly ()
+thinRedLine :: K.Assembly ()
 thinRedLine = K.do
   preamble
   org 0xF000
@@ -34,7 +39,7 @@ thinRedLine = K.do
 -- This is a direct translation of Kirk Israel's "thin red line".
 
 -- | The standard Atari 2600 start script.
-start :: Assembly ()
+start :: K.Assembly ()
 start = K.do
   label "Start"
   sei
@@ -43,7 +48,7 @@ start = K.do
   txs
   lda "#$00"
 
-clearMem :: Assembly ()
+clearMem :: K.Assembly ()
 clearMem = K.do
   label "ClearMem"
   sta "0,X" -- I wrote this wrong and spent hours trying to track down the bug this caused.
@@ -55,7 +60,7 @@ clearMem = K.do
   lda "#33"
   sta COLUP0
 
-mainLoop :: Assembly ()
+mainLoop :: K.Assembly ()
 mainLoop = K.do
   label "MainLoop"
   lda "#2"
@@ -66,7 +71,7 @@ mainLoop = K.do
   lda "#0"
   sta VSYNC
 
-waitForVblankEnd :: Assembly ()
+waitForVblankEnd :: K.Assembly ()
 waitForVblankEnd = K.do
   label "WaitForVblankEnd"
   lda INTIM
@@ -79,7 +84,7 @@ waitForVblankEnd = K.do
   sta WSYNC
   sta HMOVE
 
-scanLoop :: Assembly ()
+scanLoop :: K.Assembly ()
 scanLoop = K.do
   label "ScanLoop"
   lda SWCHA -- load joysticks
@@ -92,7 +97,7 @@ scanLoop = K.do
   sta VBLANK
   ldx "#30"
 
-overScanWait :: Assembly ()
+overScanWait :: K.Assembly ()
 overScanWait = K.do
   label "OverScanWait"
   sta WSYNC

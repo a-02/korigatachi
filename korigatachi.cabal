@@ -13,7 +13,7 @@ extra-doc-files:    CHANGELOG.md
 -- extra-source-files:
 
 common warnings
-    ghc-options: -Wall -fwrite-ide-info
+    ghc-options: -Wall -fwrite-ide-info -fprint-potential-instances
     -- -ddump-splices -dth-dec-file
 
 library
@@ -22,7 +22,6 @@ library
     exposed-modules:
         Korigatachi
         Korigatachi.Assembly.Control
-        Korigatachi.Assembly.Instruction
         Korigatachi.Assembly.Pattern
         Korigatachi.Assembly.Operand
         Korigatachi.Atari.Types
@@ -35,7 +34,7 @@ library
 
     other-modules:
         Korigatachi.Atari.Model
-        Korigatachi.Assembly.Instruction.TH
+        Korigatachi.Assembly.Control.TH
 
     -- other-extensions:
 
@@ -101,7 +100,7 @@ test-suite korigatachi-test
 
     default-language: Haskell2010
 
-    other-modules: Korigatachi.Test
+    other-modules: Korigatachi.Test, Korigatachi.Test.ThinRedLine
 
     type:             exitcode-stdio-1.0
 

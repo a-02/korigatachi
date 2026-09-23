@@ -1,6 +1,7 @@
 {-# LANGUAGE BinaryLiterals #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedLabels #-}
@@ -14,11 +15,17 @@
 
 module Korigatachi.Assembly.Control where
 
+import Control.Applicative
+import Control.Monad ((>=>))
+import Data.Attoparsec.Text qualified as Attoparsec
 import Data.Foldable (traverse_)
+import Data.Maybe (fromMaybe)
 import Data.Sequence qualified as Seq
 import Data.Text qualified as T
 import Data.Word (Word16, Word32, Word8)
-import Korigatachi.Assembly.Operand qualified as K
+import Korigatachi.Assembly.Operand as K
+import Korigatachi.Assembly.Control.TH qualified as K
+import Korigatachi.Control qualified as K
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types qualified as K
 import Prelude hiding (and, read)
@@ -89,5 +96,17 @@ byte = dc K.DCByte
 long :: Directive d => d -> K.Assembly ()
 long = dc K.DCLong
 
-label :: T.Text -> K.Assembly ()
-label = append . K.TopLevelLabel
+label :: String -> K.Assembly ()
+label str = append $ K.TopLevelLabel (T.pack str)
+
+class Operand o where
+  ins1 :: K.Shorthand -> o -> K.Assembly ()
+
+ins0 :: K.Shorthand -> K.Assembly ()
+ins0 sh = append $ K.Instruct sh K.Implied
+
+$(K.generateInstances)
+$(K.generateInstructions)
+
+instance Operand [Char] where
+  ins1 sh string = ins1 sh (T.pack string)
