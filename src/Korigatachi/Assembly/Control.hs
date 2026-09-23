@@ -69,8 +69,8 @@ instance Directive Word8 where
   dc K.DCWord w8 = append $ K.Word (fromIntegral w8)
   dc K.DCLong w8 = append $ K.Long (fromIntegral w8)
 
-instance Directive d => Directive [d] where
-  dc = traverse_ . dc -- LOL
+-- instance Directive d => Directive [d] where
+--   dc = traverse_ . dc -- LOL
 
 instance Directive T.Text where
   dc K.DCByte lb = append $ K.ByteLabel K.LabelAbsolute lb
@@ -80,13 +80,13 @@ instance Directive T.Text where
 org :: Word16 -> K.Assembly ()
 org = append . K.Org
 
-word :: Directive d => d -> K.Assembly ()
+word :: Word16 -> K.Assembly ()
 word = dc K.DCWord
 
-byte :: Directive d => d -> K.Assembly ()
+byte :: Word8 -> K.Assembly ()
 byte = dc K.DCByte
 
-long :: Directive d => d -> K.Assembly ()
+long :: Word32 -> K.Assembly ()
 long = dc K.DCLong
 
 label :: T.Text -> K.Assembly ()

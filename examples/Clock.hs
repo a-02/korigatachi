@@ -1,17 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BinaryLiterals #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QualifiedDo #-}
 
 module Main where
 
 import Control.Monad (void)
+import Data.Text qualified as T
 
 import Korigatachi.Assembly.Control
 import Korigatachi.Assembly.Instruction
 import Korigatachi.Assembly.Pattern
+import Korigatachi.Control
 import Korigatachi.Monad qualified as K
-import Korigatachi.Types
+import Korigatachi.Types hiding (zero)
 import Korigatachi qualified as Korigatachi
+import Prelude hiding (and)
 
 {--
 
@@ -77,7 +81,7 @@ clock = K.do
   zeros
   ones
   twos
-  three
+  threes
   fours
   fives
   sixes
@@ -85,8 +89,8 @@ clock = K.do
   eights
   nines
   org 0xFFFC
-  word "start"
-  word "start"
+  dc DCWord ("start" :: T.Text)
+  dc DCWord ("start" :: T.Text)
 
 
 -- RAM
@@ -250,13 +254,13 @@ minload = K.do
   lda RMINS
   sec
   sbc TEMP
-  asl
+  asl "A"
   tax
   lda "numblk,x"
   sta TEMP
   lda "numblk+1,x"
   sta (TEMP + 1)
-  ldy 
+  ldy "#$06"
   
 msload :: Assembly ()
 msload = K.do
@@ -319,7 +323,7 @@ loadhrs = K.do
   lda RHOURS
   sec
   sbc TEMP
-  asl
+  asl "A"
   tax
   lda "numblk,x"
   sta TEMP
@@ -369,9 +373,9 @@ blow1 = K.do
   dex
   bpl "blow1"
   sta WSYNC
-  rep 15 nop
+  rep 15 (nop "")
   sta RESP0
-  rep 7 nop
+  rep 7 (nop "")
   sta RESP1
   ldy "#$06"
 
@@ -379,15 +383,15 @@ sload :: Assembly ()
 sload = K.do
   label "sload"
   lda (SPRITEB <> ",y")
-  sta GP0
+  sta GRP0
   lda (SPRITEA <> ",y")
-  sta GP1
+  sta GRP1
   rep 8 (sta WSYNC)
   dey
   bpl "sload"
   lda "#$00"
-  sta GP0
-  sta GP1
+  sta GRP0
+  sta GRP1
   ldx "#$40"
 
 blow2 :: Assembly ()
@@ -468,7 +472,7 @@ now1 = K.do
   dec HOURS
   jmp "oscan"
 
-down :: Assemblu ()
+down :: Assembly ()
 down = K.do
   label "down"
   lda HOURS
@@ -491,7 +495,7 @@ now2 = K.do
   inc HOURS
   jmp "oscan"
 
-left :: Assemblu ()
+left :: Assembly ()
 left = K.do
   label "left"
   lda MINS
@@ -514,7 +518,7 @@ now3 = K.do
   dec MINS
   jmp "oscan"
   
-right :: Assemblu ()
+right :: Assembly ()
 right = K.do
   label "right"
   lda MINS

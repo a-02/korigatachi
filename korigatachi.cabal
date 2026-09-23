@@ -83,6 +83,7 @@ executable thinredline-example
         ImportQualifiedPost
     build-depends:
         base,
+        text,
         korigatachi
     default-language: Haskell2010
 
@@ -93,6 +94,7 @@ executable clock-example
         ImportQualifiedPost
     build-depends:
         base,
+        text,
         korigatachi
     default-language: Haskell2010
 
