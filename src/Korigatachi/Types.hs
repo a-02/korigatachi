@@ -52,13 +52,12 @@ data Operand
   deriving (Eq, Ord, Show)
 
 data Statement
-  = Org Word16
+  = Local Word T.Text
+  | Org Word16
   | Long Word32
   | Word Word16
   | Byte Word8
-  | LongLabel LabelAddressing T.Text
-  | WordLabel LabelAddressing T.Text
-  | ByteLabel LabelAddressing T.Text
+  | Pointer Length LabelAddressing T.Text
   | Processor T.Text
   | Include T.Text
   | TopLevelLabel T.Text
@@ -120,4 +119,4 @@ instance Show LogLevel where
 data BaseRepresentation = Binary | Octal | Decimal | Hexadecimal
   deriving (Eq, Ord)
 
-data Length = DCByte | DCWord | DCLong
+data Length = DCByte | DCWord | DCLong deriving (Show)

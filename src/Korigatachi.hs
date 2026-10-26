@@ -20,7 +20,7 @@ render asm = do
       asm
       K.Resolve.resolve
   (_, _, kty) <-
-    K.runRWIT prog (K.Env K.Warn) (K.Assemble Seq.empty)
+    K.runRWIT prog standardEnv (K.Assemble Seq.empty)
   pure kty.codegen
 
 -- | Assemble a Korigatachi program to binary.
@@ -33,5 +33,8 @@ assemble asm = do
       K.Bin.bin
       K.get
   ((K.Bin bs), _, _) <-
-    K.runRWIT prog (K.Env K.Warn) (K.Assemble Seq.empty)
+    K.runRWIT prog standardEnv (K.Assemble Seq.empty)
   pure bs
+
+standardEnv :: K.Env
+standardEnv = K.Env K.Warn

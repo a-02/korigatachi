@@ -259,7 +259,7 @@ minload = K.do
   lda "numblk,x"
   sta TEMP
   lda "numblk+1,x"
-  sta (TEMP + 1)
+  sta "TEMP+1:"
   ldy "#$06"
   
 msload :: Assembly ()
@@ -328,7 +328,7 @@ loadhrs = K.do
   lda "numblk,x"
   sta TEMP
   lda "numblk+1,x"
-  sta TEMP+1
+  sta "TEMP+1"
   ldy "#$06"
 
 hsload :: Assembly ()
@@ -345,16 +345,16 @@ hsload = K.do
 numblk :: Assembly ()
 numblk = K.do
   label "numblk"
-  word "zeros"
-  word "ones"
-  word "twos"
-  word "threes"
-  word "fours"
-  word "fives"
-  word "sixes"
-  word "sevens"
-  word "eights"
-  word "nines"
+  wordLabel "zeros" -- dc DCWord ("zeros" :: T.Text)
+  wordLabel "ones"
+  wordLabel "twos"
+  wordLabel "threes"
+  wordLabel "fours"
+  wordLabel "fives"
+  wordLabel "sixes"
+  wordLabel "sevens"
+  wordLabel "eights"
+  wordLabel "nines"
 
 draw :: Assembly ()
 draw = K.do

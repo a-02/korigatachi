@@ -23,8 +23,9 @@ library
         Korigatachi
         Korigatachi.Assembly.Control
         Korigatachi.Assembly.Instruction
-        Korigatachi.Assembly.Pattern
         Korigatachi.Assembly.Operand
+        Korigatachi.Assembly.Pattern
+        Korigatachi.Assembly.Rebind
         Korigatachi.Atari.Types
         Korigatachi.Bin
         Korigatachi.Control
