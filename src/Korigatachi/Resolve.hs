@@ -12,13 +12,12 @@
 
 module Korigatachi.Resolve where
 
-import Data.Sequence qualified as Seq
-
 -- import Data.Text qualified as T
 -- import Data.Word (Word16)
 -- import Korigatachi.Control qualified as K
 
 import Data.Foldable (toList, traverse_)
+import Data.Sequence qualified as Seq
 import Data.Text qualified as T
 import Data.Word (Word16)
 import Korigatachi.Assembly.Operand (splitWord16)
@@ -43,6 +42,7 @@ resolve = K.do
   let
     indexedStatements = Seq.zip (Seq.fromList [(0 :: Int) .. 65535]) statements
 
+    -- | Turn our list of statements into text.
     resolveCodegenHane :: K.Statement -> K.Hane K.Resolve K.Resolve ()
     resolveCodegenHane statement = K.do
       K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveCodegen = resolveCodegen Seq.|> renderStatement statement}
@@ -123,15 +123,16 @@ renderStatement = \case
   K.Org w16 -> "  org $" <> (T.pack $ w16 ^. K.hex16)
   K.Long w32 -> "  .long $" <> (T.pack $ w32 ^. K.hex32)
   K.Pointer len _ lb -> case len of
-      K.DCByte -> "  .byte " <> lb
-      K.DCWord -> "  .word " <> lb
-      K.DCLong -> "  .long " <> lb
+    K.DCByte -> "  .byte " <> lb
+    K.DCWord -> "  .word " <> lb
+    K.DCLong -> "  .long " <> lb
   K.Word w16 -> "  .word $" <> (T.pack $ w16 ^. K.hex16)
   K.Byte w8 -> "  .byte $" <> (T.pack $ w8 ^. K.hex8)
   K.Processor processor -> "  processor " <> processor
   K.Include include -> "  include " <> include
   K.TopLevelLabel label -> label
   K.Instruct short opr -> "  " <> (T.toLower $ T.show short) <> " " <> (T.pack $ operandToString opr)
+  K.Malformed _ -> undefined
 
 operandToString :: K.Operand -> String
 operandToString K.Accumulator = "A" -- For completeness.

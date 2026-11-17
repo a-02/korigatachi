@@ -19,6 +19,9 @@ module Korigatachi.Types
   , LogLevel (..)
   , BaseRepresentation (..)
   , Length (..)
+  , ASMArg (..)
+  , IntLike
+  , TextLike
   , module Atari.Types.Export
   , module Resolve.Types.Export
   )
@@ -34,6 +37,7 @@ import Korigatachi.Monad
 import Korigatachi.Resolve.Types as Resolve.Types.Export
 import Prelude hiding (break)
 
+-- | Something.
 data Operand
   = Accumulator
   | Implied
@@ -62,6 +66,7 @@ data Statement
   | Include T.Text
   | TopLevelLabel T.Text
   | Instruct Shorthand Operand
+  | Malformed T.Text
   deriving (Show)
 
 -- | There is death in the Hane.
@@ -120,3 +125,16 @@ data BaseRepresentation = Binary | Octal | Decimal | Hexadecimal
   deriving (Eq, Ord)
 
 data Length = DCByte | DCWord | DCLong deriving (Show)
+
+data IntLike
+data TextLike
+
+data ASMArg phantom
+  = AAByte Word8
+  | AAWord Word16
+  | AALong Word32
+  | AAInt Integer
+  | AAExpr T.Text -- Issue 4, an expression language!
+
+-- data Expr =
+  

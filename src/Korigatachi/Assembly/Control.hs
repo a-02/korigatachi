@@ -17,14 +17,13 @@ module Korigatachi.Assembly.Control where
 
 import Data.Sequence qualified as Seq
 import Data.Text qualified as T
-import Data.Word (Word16, Word32, Word8)
+import Data.Word (Word32, Word8)
+import Korigatachi.Assembly.Control.Internal qualified as K
 import Korigatachi.Assembly.Operand qualified as K
+import Korigatachi.Control qualified as K
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types qualified as K
 import Prelude hiding (and, read)
-import Data.Maybe (fromMaybe)
-import Control.Monad ((>=>))
-import Data.Bits ((.|.))
 
 append :: K.Statement -> K.Assembly ()
 append statement =
@@ -40,85 +39,102 @@ preamble = K.do
   append $ K.Processor "6502"
   append $ K.Include "vcs.h"
 
+rep :: K.ASMArg K.IntLike -> K.Hane i i () -> K.Hane i i ()
+rep asmArg hane =
+  either (K.log K.Warn) (go hane) (K.asmWordEither asmArg)
+ where
+  go h i =
+    case i of
+      0 -> pure ()
+      _ -> K.do
+        h
+        go h (i - 1)
 
--- nota bene:
--- this typeclass isnt the worst idea but seperating it by word size
--- has problems. we need to delineate by runtime value not by size at
--- this stage. the two instances should be for Word and Text, with
--- fromInteger specified in Korigatachi.Assembly.Rebind specd to
--- Integer -> Word. then in the word instance we do all this fun stuff
--- with DCWord and DCByte
+org :: K.ASMArg a -> K.Assembly ()
+org = \case
+  K.AAByte b -> K.do
+    K.log K.Note (orgUndersizeWarning b)
+    append $ K.Org (fromIntegral b)
+  K.AAWord w -> append $ K.Org w
+  K.AALong l -> K.log K.Warn (orgOversizeWarning l)
+  K.AAInt i
+    | abs i < 2 ^ (8 :: Integer) -> org (K.AAByte $ fromIntegral i)
+    | abs i < 2 ^ (16 :: Integer) -> org (K.AAWord $ fromIntegral i)
+    | abs i < 2 ^ (32 :: Integer) -> org (K.AALong $ fromIntegral i)
+    | otherwise -> org (K.AALong $ fromIntegral i)
+  K.AAExpr _ -> undefined
 
-class Directive d where
-  {-# MINIMAL dc #-}
-  dc :: K.Length -> d -> K.Assembly ()
-  as :: Num d => Integer -> d
-  as = fromInteger
-
-instance Directive Word32 where
-  dc K.DCByte w32 = K.do
+word :: K.ASMArg a -> K.Assembly ()
+word = \case
+  K.AAByte b -> K.do
+    K.log K.Note (wordUndersizeWarning b)
+    append $ K.Word (fromIntegral b)
+  K.AAWord w ->
+    append $ K.Word w
+  K.AALong l -> K.do
+    K.log K.Note (wordOversizeWarning l)
     let
-      (ll, lh, hl, hh) = K.splitWord32asWord8 w32
+      (llll, hhhh) = K.splitWord32asWord16 l
+    append $ K.Word llll
+    append $ K.Word hhhh
+  K.AAInt i
+    | abs i < 2 ^ (8 :: Integer) -> word (K.AAByte $ fromIntegral i)
+    | abs i < 2 ^ (16 :: Integer) -> word (K.AAWord $ fromIntegral i)
+    | abs i < 2 ^ (32 :: Integer) -> word (K.AALong $ fromIntegral i)
+    | otherwise -> org (K.AALong $ fromIntegral i)
+  K.AAExpr _ -> undefined
+
+byte :: K.ASMArg a -> K.Assembly ()
+byte = \case
+  K.AAByte b ->
+    append $ K.Byte b
+  K.AAWord w -> K.do
+    let
+      (ll, hh) = K.splitWord16 w
+    append $ K.Byte ll
+    append $ K.Byte hh
+  K.AALong l -> K.do
+    let
+      (ll, lh, hl, hh) = K.splitWord32asWord8 l
     append $ K.Byte ll
     append $ K.Byte lh
     append $ K.Byte hl
     append $ K.Byte hh
-  dc K.DCWord w32 = K.do
-    let
-      (llll, hhhh) = K.splitWord32asWord16 w32
-    append $ K.Word llll
-    append $ K.Word hhhh
-  dc K.DCLong w32 = append $ K.Long w32
+  K.AAInt i
+    | abs i < 2 ^ (8 :: Integer) -> word (K.AAByte $ fromIntegral i)
+    | abs i < 2 ^ (16 :: Integer) -> word (K.AAWord $ fromIntegral i)
+    | abs i < 2 ^ (32 :: Integer) -> word (K.AALong $ fromIntegral i)
+    | otherwise -> org (K.AALong $ fromIntegral i)
+  K.AAExpr _ -> undefined
 
-instance Directive Word16 where
-  dc K.DCByte w16 = K.do
-    let
-      (ll, hh) = K.splitWord16 w16
-    append $ K.Byte ll
-    append $ K.Byte hh
-  dc K.DCWord w16 = append $ K.Word w16
-  dc K.DCLong w16 = append $ K.Long (fromIntegral w16)
+long :: K.ASMArg a -> K.Assembly ()
+long = \case
+  K.AAByte b ->
+    append $ K.Long (fromIntegral b)
+  K.AAWord w ->
+    append $ K.Long (fromIntegral w)
+  K.AALong l ->
+    append $ K.Long l
+  K.AAInt i ->
+    append $ K.Long (fromIntegral i)
+  K.AAExpr _ -> undefined
 
-instance Directive Word8 where
-  dc K.DCByte w8 = append $ K.Byte w8
-  dc K.DCWord w8 = append $ K.Word (fromIntegral w8)
-  dc K.DCLong w8 = append $ K.Long (fromIntegral w8)
-  as int = fromInteger (int .|. 255)
+label :: K.ASMArg K.TextLike -> K.Assembly ()
+label = \case
+  K.AAExpr expr -> append $ K.TopLevelLabel expr
+  _ -> pure () -- TODO: Do the other cases.
 
--- instance Directive d => Directive [d] where
---   dc = traverse_ . dc -- LOL
+val :: K.ASMArg K.TextLike -> K.ASMArg K.IntLike -> K.Assembly ()
+val name value = undefined
 
-instance Directive T.Text where
-  dc len lb =
-    let
-      firstChar = fst <$> T.uncons lb
-      lastChar = snd <$> T.unsnoc lb
-      stripped = fromMaybe "" $ ((snd <$>) . T.uncons) >=> ((fst <$>) . T.unsnoc) $ lb
-    in
-      case (firstChar == Just '(') && (lastChar == Just ')') of
-        True -> append $ K.Pointer len K.LabelRelative stripped
-        False -> append $ K.Pointer len K.LabelAbsolute lb
+orgUndersizeWarning :: Word8 -> T.Text
+orgUndersizeWarning w8 = "`org` called with 8-bit arg \"" <> T.show w8 <> "\", expected 16-bit."
 
-org :: Word16 -> K.Assembly ()
-org = append . K.Org
+wordUndersizeWarning :: Word8 -> T.Text
+wordUndersizeWarning w8 = "`word` called with 8-bit arg \"" <> T.show w8 <> "\", expected 16-bit."
 
-word :: Directive d => d -> K.Assembly ()
-word = dc K.DCWord
+orgOversizeWarning :: Word32 -> T.Text
+orgOversizeWarning w32 = "`org` called with 32-bit arg \"" <> T.show w32 <> "\", expected 16-bit. Ignoring!"
 
-wordLabel :: T.Text -> K.Assembly ()
-wordLabel = dc K.DCWord
-
-byte :: Word8 -> K.Assembly ()
-byte = dc K.DCByte
-
-byteLabel :: T.Text -> K.Assembly ()
-byteLabel = dc K.DCByte
-
-long :: Word32 -> K.Assembly ()
-long = dc K.DCLong
-
-longLabel :: Word32 -> K.Assembly ()
-longLabel = dc K.DCLong
-
-label :: T.Text -> K.Assembly ()
-label = append . K.TopLevelLabel
+wordOversizeWarning :: Word32 -> T.Text
+wordOversizeWarning w32 = "`word` called with 32-bit arg \"" <> T.show w32 <> "\", expected 16-bit. Writing as two 16-bit words."

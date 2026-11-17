@@ -1,4 +1,3 @@
-{-# LANGUAGE NamedDefaults #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QualifiedDo #-}
@@ -7,21 +6,19 @@
 module Main where
 
 import Control.Monad (void)
-import Data.String (IsString(..))
 import Data.Text qualified as T
 
 import Prelude hiding (fromInteger)
+import Data.String hiding (fromString)
+import Korigatachi.Assembly.Rebind (fromInteger, fromString)
 
 import Korigatachi.Assembly.Control
 import Korigatachi.Control
 import Korigatachi.Assembly.Instruction
 import Korigatachi.Assembly.Pattern
-import Korigatachi.Assembly.Rebind (fromInteger)
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types
 import Korigatachi qualified as Korigatachi
-
-default IsString (T.Text)
 
 main :: IO ()
 main = do

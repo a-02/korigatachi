@@ -1,6 +1,7 @@
 {-# LANGUAGE BinaryLiterals #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -12,6 +13,7 @@ import Data.Text qualified as T
 import Data.Vector.Sized qualified as Sized
 import Data.Word (Word16, Word8)
 import GHC.Generics qualified as Generic
+import Language.Haskell.TH.Syntax (Lift)
 import Prelude hiding (break)
 
 data Atari = Atari
@@ -340,4 +342,4 @@ data Shorthand
   | TXS -- Done?
   | TYA
   | UBC
-  deriving (Eq, Ord, Show, Enum, Bounded)
+  deriving (Eq, Ord, Show, Enum, Bounded, Lift)
