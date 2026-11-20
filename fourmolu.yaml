@@ -1,5 +1,5 @@
 indentation: 2
-function-arrows: trailing
+function-arrows: leading
 comma-style: leading # default
 import-export-style: leading
 indent-wheres: false # default
@@ -7,11 +7,12 @@ record-brace-space: true
 newlines-between-decls: 1 # default
 haddock-style: multi-line # default
 haddock-style-module: # default
-let-style: newline
-in-style: left-align
+let-style: inline
+in-style: right-align
 unicode: never # default
 respectful: true # default
 single-constraint-parens: never
+import-grouping: by-scope-then-qualified
 fixities:
   # Comparison
   - infixr 8 .&&, .||

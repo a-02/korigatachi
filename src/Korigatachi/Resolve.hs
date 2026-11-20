@@ -7,6 +7,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -Wno-unused-matches #-}
 
 {- HLINT ignore "Use $>" -}
 
@@ -17,15 +18,18 @@ module Korigatachi.Resolve where
 -- import Korigatachi.Control qualified as K
 
 import Data.Foldable (toList, traverse_)
+import Data.Word (Word16)
+import Optics ((^.))
+import Prelude hiding (and, read)
+
 import Data.Sequence qualified as Seq
 import Data.Text qualified as T
-import Data.Word (Word16)
+
 import Korigatachi.Assembly.Operand (splitWord16)
+
 import Korigatachi.Control qualified as K
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types qualified as K
-import Optics ((^.))
-import Prelude hiding (and, read)
 
 resolve :: K.Hane K.Assemble K.Resolve ()
 resolve = K.do
@@ -39,36 +43,39 @@ resolve = K.do
       , K.resolveCodegen = Seq.empty
       , K.resolveProgramCounter = 0
       }
-  let
-    indexedStatements = Seq.zip (Seq.fromList [(0 :: Int) .. 65535]) statements
+  let indexedStatements = Seq.zip (Seq.fromList [(0 :: Int) .. 65535]) statements
 
-    -- | Turn our list of statements into text.
-    resolveCodegenHane :: K.Statement -> K.Hane K.Resolve K.Resolve ()
-    resolveCodegenHane statement = K.do
-      K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveCodegen = resolveCodegen Seq.|> renderStatement statement}
+      -- \| Turn our list of statements into text.
+      resolveCodegenHane :: K.Statement -> K.Hane K.Resolve K.Resolve ()
+      resolveCodegenHane statement = K.do
+        K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveCodegen = resolveCodegen Seq.|> renderStatement statement}
 
-    resolveTopLevelLabelHane :: Int -> K.Statement -> K.Hane K.Resolve K.Resolve ()
-    resolveTopLevelLabelHane statementIndex statement = K.do
-      case statement of
-        K.Org w16 -> K.modify $ \rsv -> rsv {K.resolveProgramCounter = w16 + 1} -- Why do I need to do this?
-        K.TopLevelLabel label -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveLabels = resolveLabels Seq.|> (resolveProgramCounter, label)}
-        K.Long _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 4}
-        K.Pointer _ _ _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 4}
-        K.Word _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 2}
-        K.Byte _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 1}
-        K.Instruct sh opr ->
-          case opr of
-            K.Label labelAddrModes lb -> K.do
-              labels <- K.resolveLabels <$> K.get
-              res <- resolveLabel labels labelAddrModes lb
-              K.modify $ \rsv@(K.Resolve {..}) ->
-                rsv
-                  { K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr
-                  , K.resolveStatements = Seq.update statementIndex (K.Instruct sh res) resolveStatements
-                  }
-            _ ->
-              K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr}
-        _ -> pure ()
+      resolveTopLevelLabelHane :: Int -> K.Statement -> K.Hane K.Resolve K.Resolve ()
+      resolveTopLevelLabelHane statementIndex statement = K.do
+        case statement of
+          K.Org w16 -> K.modify $ \rsv -> rsv {K.resolveProgramCounter = w16 + 1} -- Why do I need to do this?
+          K.TopLevelLabel label -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveLabels = resolveLabels Seq.|> (resolveProgramCounter, label)}
+          K.Long _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 4}
+          K.Pointer _ _ _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 4}
+          K.Word _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 2}
+          K.Byte _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 1}
+          K.Instruct sh opr ->
+            case opr of
+              K.Unresolved lb -> K.do
+                labels <- K.resolveLabels <$> K.get
+                res <- resolveLabel labels lb
+                K.modify $ \rsv@(K.Resolve {..}) ->
+                  rsv
+                    { K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr
+                    , K.resolveStatements =
+                        Seq.update statementIndex (K.Instruct sh res) resolveStatements
+                    }
+              _ ->
+                K.modify $ \rsv@(K.Resolve {..}) ->
+                  rsv
+                    { K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr
+                    }
+          _ -> pure ()
 
   traverse_ resolveCodegenHane statements -- Technically, this is Pass 2.
   K.log K.Info "Pass 2 of 3 completed."
@@ -80,42 +87,50 @@ resolve = K.do
   pure ()
 
 -- | Refers to labels in the past AND future!
-resolveLabel :: Seq.Seq (Word16, T.Text) -> [K.LabelAddressing] -> T.Text -> K.Hane K.Resolve K.Resolve K.Operand
-resolveLabel labels labelAddressing toResolve = K.do
-  pc <- K.resolveProgramCounter <$> K.get
-  let
-    (programCounterLow, programCounterHigh) = splitWord16 pc
-    found = Seq.lookup 0 $ Seq.filter (\(_, lb) -> lb == toResolve) labels
-  case (toResolve == ".") of -- Special case for "current program counter" label.
-    True -> pure $ K.Absolute programCounterLow programCounterHigh
-    False ->
-      case (found, labelAddressing) of
-        (Nothing, _) -> K.do
-          K.log K.Warn $ "Unrecognized label: " <> toResolve
-          pure $ K.Label [] ""
-        (_, []) -> K.do
-          K.log K.Warn "Missing label addressing modes."
-          pure $ K.Label [] ""
-        (Just (addr, _), (labelAddrMode : _)) -> K.do
-          K.log K.Info $ "Resolving label: " <> toResolve <> " | PC=" <> T.show pc <> " | LabelAddress=" <> T.show addr
-          pure $ reifyLabel labelAddrMode pc addr
+resolveLabel
+  :: Seq.Seq (Word16, T.Text)
+  -- -> [K.LabelAddressing]
+  -> T.Text
+  -> K.Hane K.Resolve K.Resolve K.Operand
+resolveLabel labels toResolve = undefined
+
+-- pc <- K.resolveProgramCounter <$> K.get
+-- let (programCounterLow, programCounterHigh) = splitWord16 pc
+--     found = Seq.lookup 0 $ Seq.filter (\(_, lb) -> lb == toResolve) labels
+-- case (toResolve == ".") of -- Special case for "current program counter" label.
+--   True -> pure $ K.Absolute programCounterLow programCounterHigh
+--   False ->
+--     case (found, labelAddressing) of
+--       (Nothing, _) -> K.do
+--         K.log K.Warn $ "Unrecognized label: " <> toResolve
+--         pure $ K.Unresolved [] ""
+--       (_, []) -> K.do
+--         K.log K.Warn "Missing label addressing modes."
+--         pure $ K.Unresolved [] ""
+--       (Just (addr, _), (labelAddrMode : _)) -> K.do
+--         K.log K.Info $
+--           "Resolving label: "
+--             <> toResolve
+--             <> " | PC="
+--             <> T.show pc
+--             <> " | LabelAddress="
+--             <> T.show addr
+--         pure $ reifyLabel labelAddrMode pc addr
 
 -- | TODO: Better name!
 reifyLabel :: K.LabelAddressing -> Word16 -> Word16 -> K.Operand
 reifyLabel la pc addr =
-  let
-    (hh, ll) = splitWord16 addr
-    intAddr :: Int
-    intAddr = fromIntegral addr
-    intPC :: Int
-    intPC = fromIntegral pc
-    diff = fromIntegral $ intAddr - (intPC + 2) -- This works cause of literal overflow.
-    -- The "plus 2" is because we're counting the difference AFTER the branch.
-  in
-    case la of
-      K.LabelAbsolute -> K.Absolute ll hh
-      K.LabelRelative -> K.Relative diff
-      K.LabelIndirect -> K.Indirect ll hh
+  let (hh, ll) = splitWord16 addr
+      intAddr :: Int
+      intAddr = fromIntegral addr
+      intPC :: Int
+      intPC = fromIntegral pc
+      diff = fromIntegral $ intAddr - (intPC + 2) -- This works cause of literal overflow.
+      -- The "plus 2" is because we're counting the difference AFTER the branch.
+   in case la of
+        K.LabelAbsolute -> K.Absolute ll hh
+        K.LabelRelative -> K.Relative diff
+        K.LabelIndirect -> K.Indirect ll hh
 
 renderStatement :: K.Statement -> T.Text
 renderStatement = \case
@@ -133,6 +148,7 @@ renderStatement = \case
   K.TopLevelLabel label -> label
   K.Instruct short opr -> "  " <> (T.toLower $ T.show short) <> " " <> (T.pack $ operandToString opr)
   K.Malformed _ -> undefined
+  K.Val _ _ -> undefined
 
 operandToString :: K.Operand -> String
 operandToString K.Accumulator = "A" -- For completeness.
@@ -145,38 +161,30 @@ operandToString (K.ZeroPage opr) = "$" <> (opr ^. K.hex8)
 operandToString (K.ZeroPageX opr) = "$" <> (opr ^. K.hex8) <> ",x"
 operandToString (K.ZeroPageY opr) = "$" <> (opr ^. K.hex8) <> ",y"
 operandToString (K.Absolute ll hh) =
-  let
-    low :: Word16
-    low = fromIntegral ll
-    high :: Word16
-    high = fromIntegral hh
-  in
-    "$" <> ((high * 256 + low) ^. K.hex16) -- order of operations?
+  let low :: Word16
+      low = fromIntegral ll
+      high :: Word16
+      high = fromIntegral hh
+   in "$" <> ((high * 256 + low) ^. K.hex16) -- order of operations?
 operandToString (K.AbsoluteX ll hh) =
-  let
-    low :: Word16
-    low = fromIntegral ll
-    high :: Word16
-    high = fromIntegral hh
-  in
-    "$" <> ((high * 256 + low) ^. K.hex16) <> ",x" -- order of operations?
+  let low :: Word16
+      low = fromIntegral ll
+      high :: Word16
+      high = fromIntegral hh
+   in "$" <> ((high * 256 + low) ^. K.hex16) <> ",x" -- order of operations?
 operandToString (K.AbsoluteY ll hh) =
-  let
-    low :: Word16
-    low = fromIntegral ll
-    high :: Word16
-    high = fromIntegral hh
-  in
-    "$" <> ((high * 256 + low) ^. K.hex16) <> ",y" -- order of operations?
+  let low :: Word16
+      low = fromIntegral ll
+      high :: Word16
+      high = fromIntegral hh
+   in "$" <> ((high * 256 + low) ^. K.hex16) <> ",y" -- order of operations?
 operandToString (K.Indirect ll hh) =
-  let
-    low :: Word16
-    low = fromIntegral ll
-    high :: Word16
-    high = fromIntegral hh
-  in
-    "($" <> ((high * 256 + low) ^. K.hex16) <> ")" -- order of operations?
-operandToString (K.Label _ lb) = T.unpack lb
+  let low :: Word16
+      low = fromIntegral ll
+      high :: Word16
+      high = fromIntegral hh
+   in "($" <> ((high * 256 + low) ^. K.hex16) <> ")" -- order of operations?
+operandToString (K.Unresolved lb) = T.unpack lb
 
 operandToProgramCount :: K.Operand -> Word16
 operandToProgramCount K.Accumulator = 1
@@ -192,7 +200,7 @@ operandToProgramCount (K.Absolute _ _) = 3
 operandToProgramCount (K.AbsoluteX _ _) = 3
 operandToProgramCount (K.AbsoluteY _ _) = 3
 operandToProgramCount (K.Indirect _ _) = 3
-operandToProgramCount (K.Label labelAddrModes _) = foldl1 max $ labelAddressingModeProgramCount <$> labelAddrModes
+operandToProgramCount (K.Unresolved _) = 3 -- It should be impossible to refer to a label in the 8-bit range.
 
 -- | This is fine actually, since Relative is exclusive to conditional branch instructions.
 labelAddressingModeProgramCount :: K.LabelAddressing -> Word16

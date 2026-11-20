@@ -32,7 +32,8 @@ instance Functor m => Functor (RWIT r w m i j) where
 
 -- | Don't look at me. I'm hideous.
 instance (Monad m, Monoid w) => Applicative (RWIT r w m i i) where
-  liftA2 :: (a -> b -> c) -> RWIT r w m i i a -> RWIT r w m i i b -> RWIT r w m i i c
+  liftA2
+    :: (a -> b -> c) -> RWIT r w m i i a -> RWIT r w m i i b -> RWIT r w m i i c
   liftA2 f fa fb = (ixpure f) `ixap` fa `ixap` fb
   pure :: a -> RWIT r w m i i a
   pure = ixpure
@@ -121,11 +122,11 @@ instance Functor m => Functor (RWIPT r w m i j) where
 instance (Monoid w, Monad f) => IndexedApplicative (RWIPT r w f) where
   ixpure :: a -> RWIPT r w f i j a
   ixpure a = RWIPT $ \_ -> pure (a, mempty)
-  ixap ::
-    forall kind (i :: kind) (j :: kind) (k :: kind) a b.
-    RWIPT r w f i j (a -> b) ->
-    RWIPT r w f j k a ->
-    RWIPT r w f i k b
+  ixap
+    :: forall kind (i :: kind) (j :: kind) (k :: kind) a b
+     . RWIPT r w f i j (a -> b)
+    -> RWIPT r w f j k a
+    -> RWIPT r w f i k b
   ixap fijab fjka = ixbind fijab $ \ab -> ixbind fjka $ \a -> ixpure (ab a)
 
 instance (Monad m, Monoid w) => IndexedMonad (RWIPT r w m) where

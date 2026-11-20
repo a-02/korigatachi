@@ -1,9 +1,10 @@
 module Korigatachi.Assembly.Rebind where
 
+import Prelude as Prelude
+
 import Data.Text qualified as T
 
 import Korigatachi.Types (ASMArg (..), IntLike, TextLike)
-import Prelude as Prelude
 
 fromInteger :: Integer -> ASMArg IntLike
 fromInteger i

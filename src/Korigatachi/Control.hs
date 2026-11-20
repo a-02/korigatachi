@@ -9,6 +9,17 @@
 
 module Korigatachi.Control where
 
+-- korigatachi
+
+import Data.Word
+import Numeric (showHex)
+import Optics
+-- sized-vector
+
+-- base
+
+import Prelude hiding (break)
+
 -- containers
 
 -- finite-typelits
@@ -16,19 +27,8 @@ module Korigatachi.Control where
 -- text
 import Data.Text qualified as T
 
--- sized-vector
-
--- base
-
-import Prelude hiding (break)
-
--- korigatachi
-
-import Data.Word
 import Korigatachi.Monad as K
 import Korigatachi.Types
-import Numeric (showHex)
-import Optics
 
 -- | Write to the writer.
 katteyomi :: T.Text -> T.Text -> Hane i i ()

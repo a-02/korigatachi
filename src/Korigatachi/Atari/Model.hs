@@ -11,19 +11,16 @@
 
 module Korigatachi.Atari.Model where
 
-import Data.Map.Strict qualified as Map
-
-import Data.Finite (finite)
-
-import Data.Text qualified as T
-
-import Data.Vector.Sized ((//))
-import Data.Vector.Sized qualified as Sized
-
 import Data.Bits (Bits (bit, (.|.)), testBit)
+import Data.Finite (finite)
 import Data.List as List
+import Data.Vector.Sized ((//))
 import Data.Word (Word8)
 import Prelude hiding (break)
+
+import Data.Map.Strict qualified as Map
+import Data.Text qualified as T
+import Data.Vector.Sized qualified as Sized
 
 import Korigatachi.Types
 
@@ -81,19 +78,17 @@ emptyTV =
 
 advanceTV :: Int -> TV -> TV
 advanceTV cyclesToAdvance television =
-  let
-    current = (television.frame * 19912) + (television.line * 76) + television.hPos
-    advanced = current + cyclesToAdvance
-    (advFrame, remFrame) = advanced `quotRem` 19912 -- 262 * 76
-    (advLine, advHPos) = remFrame `quotRem` 76 -- 76
-  in
-    TV
-      { frame = advFrame
-      , section = television.section -- TODO: Actually update the section.
-      , line = advLine
-      , hPos = advHPos
-      , region = television.region -- Imagine changing the region of a console while it's on.
-      }
+  let current = (television.frame * 19912) + (television.line * 76) + television.hPos
+      advanced = current + cyclesToAdvance
+      (advFrame, remFrame) = advanced `quotRem` 19912 -- 262 * 76
+      (advLine, advHPos) = remFrame `quotRem` 76 -- 76
+   in TV
+        { frame = advFrame
+        , section = television.section -- TODO: Actually update the section.
+        , line = advLine
+        , hPos = advHPos
+        , region = television.region -- Imagine changing the region of a console while it's on.
+        }
 
 emptyPIA :: PIA
 emptyPIA = PIA 0 0 0 0 0 0 0 0 0
@@ -105,7 +100,53 @@ emptyReadTIA :: ReadTIA
 emptyReadTIA = ReadTIA 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -- lol
 
 emptyWriteTIA :: WriteTIA
-emptyWriteTIA = WriteTIA 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -- LOL
+emptyWriteTIA =
+  WriteTIA
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0
+    0 -- LOL
 
 emptyCPU :: MOS6507
 emptyCPU =
@@ -131,18 +172,16 @@ flagsToWord8
     , zero
     , carry
     } =
-    let
-      bitBool False _ = 0
-      bitBool True x = bit x
-    in
-      bitBool negative 7
-        .|. bitBool overflow 6
-        .|. bitBool ignored 5
-        .|. bitBool break 4
-        .|. bitBool decimal 3
-        .|. bitBool interrupt 2
-        .|. bitBool zero 1
-        .|. bitBool carry 0 -- Strange, isn't it?
+    let bitBool False _ = 0
+        bitBool True x = bit x
+     in bitBool negative 7
+          .|. bitBool overflow 6
+          .|. bitBool ignored 5
+          .|. bitBool break 4
+          .|. bitBool decimal 3
+          .|. bitBool interrupt 2
+          .|. bitBool zero 1
+          .|. bitBool carry 0 -- Strange, isn't it?
 
 word8ToFlags :: Word8 -> Flags
 word8ToFlags w8 =
@@ -318,7 +357,14 @@ instructions 0x97 = Instruction SAX "ZeroPageY" 0x97 2 4 "A AND X -> Memory"
 instructions 0x98 = Instruction TYA "Implied" 0x98 1 2 "Transfer Y to Accumulator"
 instructions 0x99 = Instruction STA "AbsoluteY" 0x99 3 5 "Store Accumulator in Memory"
 instructions 0x9A = Instruction TXS "Implied" 0x9A 1 2 "Transfer X to Stack Register"
-instructions 0x9B = Instruction TAS "AbsoluteY" 0x9B 3 5 "A AND X -> SP, A AND X AND (H+1) -> M, UNSTABLE"
+instructions 0x9B =
+  Instruction
+    TAS
+    "AbsoluteY"
+    0x9B
+    3
+    5
+    "A AND X -> SP, A AND X AND (H+1) -> M, UNSTABLE"
 instructions 0x9C = Instruction SHY "AbsoluteX" 0x9C 3 5 "Y AND (H+1) -> M, UNSTABLE"
 instructions 0x9D = Instruction STA "AbsoluteX" 0x9D 3 5 "Store Accumulator in Memory"
 instructions 0x9F = Instruction SHA "AbsoluteY" 0x9F 3 5 "A AND X AND (H+1) -> M, UNSTABLE"
@@ -333,7 +379,14 @@ instructions 0xA7 = Instruction LAX "ZeroPage" 0xA7 2 3 "LDA oper + LDX oper"
 instructions 0xA8 = Instruction TAY "Implied" 0xA8 1 2 "Transfer Accumulator to Y"
 instructions 0xA9 = Instruction LDA "Immediate" 0xA9 2 2 "Load Accumulator with Memory"
 instructions 0xAA = Instruction TAX "Implied" 0xAA 1 2 "Transfer Accumulator to A"
-instructions 0xAB = Instruction LXA "Immediate" 0xAB 2 2 "Store * AND oper in A and X, HIGHLY UNSTABLE"
+instructions 0xAB =
+  Instruction
+    LXA
+    "Immediate"
+    0xAB
+    2
+    2
+    "Store * AND oper in A and X, HIGHLY UNSTABLE"
 instructions 0xAC = Instruction LDY "Absolute" 0xAC 3 4 "Load Y into Memory"
 instructions 0xAD = Instruction LDA "Absolute" 0xAD 3 4 "Load Accumulator with Memory"
 instructions 0xAE = Instruction LDX "Absolute" 0xAE 3 4 "Load X with Memory"
@@ -387,35 +440,91 @@ instructions 0xDD = Instruction CMP "AbsoluteX" 0xDD 3 4 "Compare Memory with Ac
 instructions 0xDE = Instruction DEC "AbsoluteX" 0xDE 3 7 "Decrement Memory by One"
 instructions 0xDF = Instruction DCP "AbsoluteX" 0xDF 3 7 "DEC oper + CMP oper"
 instructions 0xE0 = Instruction CPX "Immediate" 0xE0 2 2 "Compare Memory and X"
-instructions 0xE1 = Instruction SBC "IndirectX" 0xE1 2 6 "Subtract Memory from Accumulator with Borrow"
+instructions 0xE1 =
+  Instruction
+    SBC
+    "IndirectX"
+    0xE1
+    2
+    6
+    "Subtract Memory from Accumulator with Borrow"
 instructions 0xE2 = Instruction NOP "Immediate" 0xE2 2 2 "No operation"
 instructions 0xE3 = Instruction ISC "IndirectX" 0xE3 2 8 "INC oper + CMP oper"
 instructions 0xE4 = Instruction CPX "ZeroPage" 0xE4 2 3 "Compare Memory and X"
-instructions 0xE5 = Instruction SBC "ZeroPage" 0xE5 2 3 "Subtract Memory from Accumulator with Borrow"
+instructions 0xE5 =
+  Instruction
+    SBC
+    "ZeroPage"
+    0xE5
+    2
+    3
+    "Subtract Memory from Accumulator with Borrow"
 instructions 0xE6 = Instruction INC "ZeroPage" 0xE6 2 5 "Increment Memory by One"
 instructions 0xE7 = Instruction ISC "ZeroPage" 0xE7 2 5 "INC oper + CMP oper"
 instructions 0xE8 = Instruction INX "Implied" 0xE8 1 2 "Increment X by One"
-instructions 0xE9 = Instruction SBC "Immediate" 0xE9 2 2 "Subtract Memory from Accumulator with Borrow"
+instructions 0xE9 =
+  Instruction
+    SBC
+    "Immediate"
+    0xE9
+    2
+    2
+    "Subtract Memory from Accumulator with Borrow"
 instructions 0xEA = Instruction NOP "Immediate" 0xEA 1 2 "No operation"
 instructions 0xEB = Instruction UBC "Immediate" 0xEB 2 2 "SBC oper + NOP"
 instructions 0xEC = Instruction CPX "Absolute" 0xEC 3 4 "Compare Memory and X"
-instructions 0xED = Instruction SBC "Absolute" 0xED 3 4 "Subtract Memory from Accumulator with Borrow"
+instructions 0xED =
+  Instruction
+    SBC
+    "Absolute"
+    0xED
+    3
+    4
+    "Subtract Memory from Accumulator with Borrow"
 instructions 0xEE = Instruction INC "Absolute" 0xEE 3 6 "Increment Memory by One"
 instructions 0xEF = Instruction ISC "Absolute" 0xEF 3 6 "INC oper + CMP oper"
 instructions 0xF0 = Instruction BEQ "Relative" 0xF0 2 2 "Branch on Result Zero"
-instructions 0xF1 = Instruction SBC "IndirectY" 0xF1 2 5 "Subtract Memory from Accumulator with Borrow"
+instructions 0xF1 =
+  Instruction
+    SBC
+    "IndirectY"
+    0xF1
+    2
+    5
+    "Subtract Memory from Accumulator with Borrow"
 instructions 0xF2 = Instruction JAM "Implied" 0xF2 0 0 "Freeze the CPU"
 instructions 0xF3 = Instruction ISC "IndirectY" 0xF3 2 8 "INC oper + CMP oper"
 instructions 0xF4 = Instruction NOP "ZeroPageX" 0xF4 2 4 "No operation"
-instructions 0xF5 = Instruction SBC "ZeroPageX" 0xF5 2 4 "Subtract Memory from Accumulator with Borrow"
+instructions 0xF5 =
+  Instruction
+    SBC
+    "ZeroPageX"
+    0xF5
+    2
+    4
+    "Subtract Memory from Accumulator with Borrow"
 instructions 0xF6 = Instruction INC "ZeroPageX" 0xF6 2 6 "Increment Memory by One"
 instructions 0xF7 = Instruction ISC "ZeroPageX" 0xF7 2 6 "INC oper + CMP oper"
 instructions 0xF8 = Instruction SED "Implied" 0xF8 1 2 "Set Decimal Flag"
-instructions 0xF9 = Instruction SBC "AbsoluteY" 0xF9 3 4 "Subtract Memory from Accumulator with Borrow"
+instructions 0xF9 =
+  Instruction
+    SBC
+    "AbsoluteY"
+    0xF9
+    3
+    4
+    "Subtract Memory from Accumulator with Borrow"
 instructions 0xFA = Instruction NOP "Implied" 0xFA 1 2 "No operation"
 instructions 0xFB = Instruction ISC "AbsoluteY" 0xFB 3 7 "INC oper + CMP oper"
 instructions 0xFC = Instruction NOP "AbsoluteX" 0xFC 3 4 "No operation"
-instructions 0xFD = Instruction SBC "AbsoluteX" 0xFD 3 4 "Subtract Memory from Accumulator with Borrow"
+instructions 0xFD =
+  Instruction
+    SBC
+    "AbsoluteX"
+    0xFD
+    3
+    4
+    "Subtract Memory from Accumulator with Borrow"
 instructions 0xFE = Instruction INC "AbsoluteX" 0xFE 3 7 "Increment Memory by One"
 instructions 0xFF = Instruction ISC "AbsoluteX" 0xFF 3 7 "INC oper + CMP oper"
 instructions _ = jamInstruction

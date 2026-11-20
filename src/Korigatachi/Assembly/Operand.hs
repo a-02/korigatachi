@@ -6,41 +6,37 @@
 
 module Korigatachi.Assembly.Operand where
 
-import Data.Attoparsec.Text qualified as Attoparsec
-
 import Control.Applicative
 import Control.Monad (void)
 import Data.Bits
 import Data.Char (ord)
 import Data.Word (Word16, Word32, Word8)
+
+import Data.Attoparsec.Text qualified as Attoparsec
+
 import Korigatachi.Types (Operand (..))
+
 import Korigatachi.Types qualified as K
 
 splitWord16 :: Word16 -> (Word8, Word8) -- Little-endian, (LL, HH)
 splitWord16 w16 =
-  let
-    ll = w16 .&. 0x00FF
-    hh = (w16 .&. 0xFF00) `rotateR` 8 -- move the top 8 bits to the bottom
-  in
-    (fromIntegral ll, fromIntegral hh)
+  let ll = w16 .&. 0x00FF
+      hh = (w16 .&. 0xFF00) `rotateR` 8 -- move the top 8 bits to the bottom
+   in (fromIntegral ll, fromIntegral hh)
 
 splitWord32asWord8 :: Word32 -> (Word8, Word8, Word8, Word8)
 splitWord32asWord8 w32 =
-  let
-    ll = w32 .&. 0x000000FF
-    lh = (w32 .&. 0x0000FF00) `rotateR` 8
-    hl = (w32 .&. 0x00FF0000) `rotateR` 16
-    hh = (w32 .&. 0xFF000000) `rotateR` 24
-  in
-    (fromIntegral ll, fromIntegral lh, fromIntegral hl, fromIntegral hh)
+  let ll = w32 .&. 0x000000FF
+      lh = (w32 .&. 0x0000FF00) `rotateR` 8
+      hl = (w32 .&. 0x00FF0000) `rotateR` 16
+      hh = (w32 .&. 0xFF000000) `rotateR` 24
+   in (fromIntegral ll, fromIntegral lh, fromIntegral hl, fromIntegral hh)
 
 splitWord32asWord16 :: Word32 -> (Word16, Word16)
 splitWord32asWord16 w32 =
-  let
-    llll = w32 .&. 0x0000FFFF
-    hhhh = w32 .&. 0xFFFF0000 `rotateR` 16
-  in
-    (fromIntegral llll, fromIntegral hhhh)
+  let llll = w32 .&. 0x0000FFFF
+      hhhh = w32 .&. 0xFFFF0000 `rotateR` 16
+   in (fromIntegral llll, fromIntegral hhhh)
 
 isOctalDigit :: Char -> Bool
 isOctalDigit c = let w = ord c in w >= 49 && w <= 55
@@ -50,12 +46,10 @@ isBinaryDigit c = let w = ord c in w >= 48 && w <= 49
 
 isHexDigit :: Char -> Bool
 isHexDigit c =
-  let
-    w = ord c
-  in
-    (w >= 48 && w <= 57)
-      || (w >= 97 && w <= 102)
-      || (w >= 65 && w <= 70)
+  let w = ord c
+   in (w >= 48 && w <= 57)
+        || (w >= 97 && w <= 102)
+        || (w >= 65 && w <= 70)
 
 shiftChar :: (Num a, Bits a) => Int -> Int -> Char -> a
 shiftChar bits nibbles c
@@ -210,4 +204,4 @@ parseIndirect = do
   pure $ Indirect ll hh
 
 parseLabel :: Attoparsec.Parser Operand
-parseLabel = (Label []) <$> Attoparsec.takeText
+parseLabel = Unresolved <$> Attoparsec.takeText

@@ -5,6 +5,9 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 
 module Korigatachi.Types
   ( Operand (..)
@@ -27,15 +30,17 @@ module Korigatachi.Types
   )
 where
 
+import Data.Word (Word16, Word32, Word8)
+import Prelude hiding (break)
+
 import Data.ByteString qualified as BS
 import Data.Sequence qualified as Seq
 import Data.Text qualified as T
-import Data.Word (Word16, Word32, Word8)
 import GHC.Generics qualified as Generic
+
 import Korigatachi.Atari.Types as Atari.Types.Export
 import Korigatachi.Monad
 import Korigatachi.Resolve.Types as Resolve.Types.Export
-import Prelude hiding (break)
 
 -- | Something.
 data Operand
@@ -52,7 +57,7 @@ data Operand
   | AbsoluteX Word8 Word8
   | AbsoluteY Word8 Word8
   | Indirect Word8 Word8
-  | Label [LabelAddressing] T.Text
+  | Unresolved T.Text
   deriving (Eq, Ord, Show)
 
 data Statement
@@ -67,6 +72,7 @@ data Statement
   | TopLevelLabel T.Text
   | Instruct Shorthand Operand
   | Malformed T.Text
+  | Val T.Text Word
   deriving (Show)
 
 -- | There is death in the Hane.
@@ -129,12 +135,27 @@ data Length = DCByte | DCWord | DCLong deriving (Show)
 data IntLike
 data TextLike
 
-data ASMArg phantom
-  = AAByte Word8
-  | AAWord Word16
-  | AALong Word32
-  | AAInt Integer
-  | AAExpr T.Text -- Issue 4, an expression language!
+data ASMArg phantom where
+  AAByte :: Word8 -> ASMArg IntLike
+  AAWord :: Word16 -> ASMArg IntLike
+  AALong :: Word32 -> ASMArg IntLike
+  AAInt :: Integer -> ASMArg IntLike
+  AAExpr :: T.Text -> ASMArg TextLike
+  
+-- instance Num (ASMArg IntLike) where
+  -- (+) :: ASMArg a -> ASMArg a -> ASMArg a
+  -- (+) = _
+  -- (-) :: ASMArg a -> ASMArg a -> ASMArg a
+  -- (-) = _
+  -- (*) :: ASMArg a -> ASMArg a -> ASMArg a
+  -- (*) = _
+  -- negate :: ASMArg a -> ASMArg a
+  -- negate = _
+  -- abs :: ASMArg a -> ASMArg a
+  -- abs = _
+  -- signum :: ASMArg a -> ASMArg a
+  -- signum = _
+  -- fromInteger :: Integer -> ASMArg a
+  -- fromInteger = _
 
 -- data Expr =
-  

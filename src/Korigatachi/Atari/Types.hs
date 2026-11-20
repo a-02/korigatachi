@@ -9,12 +9,13 @@
 
 module Korigatachi.Atari.Types where
 
-import Data.Text qualified as T
-import Data.Vector.Sized qualified as Sized
 import Data.Word (Word16, Word8)
-import GHC.Generics qualified as Generic
 import Language.Haskell.TH.Syntax (Lift)
 import Prelude hiding (break)
+
+import Data.Text qualified as T
+import Data.Vector.Sized qualified as Sized
+import GHC.Generics qualified as Generic
 
 data Atari = Atari
   { ram :: Memory
@@ -29,8 +30,8 @@ data Atari = Atari
   -- ^ Television Interface Adapter.
   , pia :: PIA
   {- ^ Off-the-shelf 6532 Peripheral Interface Adapter.
-  Technically, the RAM is controlled by this chip, but
-  it's easier to abstract the RAM to a seperate field.
+    Technically, the RAM is controlled by this chip, but
+    it's easier to abstract the RAM to a seperate field.
   -}
   }
   deriving (Generic.Generic)
@@ -233,7 +234,7 @@ data TV = TV
   -- ^ vertical position, 0-261 for NTSC.
   , hPos :: Int
   {- ^ horizontal position, 68 "pixels" of hblank, 160 pixels of color
-  one cpu cycle is 3 "pixels", so we get 76 cycles per line. This is 0-indexed.
+    one cpu cycle is 3 "pixels", so we get 76 cycles per line. This is 0-indexed.
   -}
   , region :: Region
   }

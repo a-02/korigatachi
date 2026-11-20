@@ -15,15 +15,17 @@
 
 module Korigatachi.Assembly.Control where
 
+import Data.Word (Word32, Word8)
+import Prelude hiding (and, read)
+
 import Data.Sequence qualified as Seq
 import Data.Text qualified as T
-import Data.Word (Word32, Word8)
+
 import Korigatachi.Assembly.Control.Internal qualified as K
 import Korigatachi.Assembly.Operand qualified as K
 import Korigatachi.Control qualified as K
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types qualified as K
-import Prelude hiding (and, read)
 
 append :: K.Statement -> K.Assembly ()
 append statement =
@@ -41,7 +43,7 @@ preamble = K.do
 
 rep :: K.ASMArg K.IntLike -> K.Hane i i () -> K.Hane i i ()
 rep asmArg hane =
-  either (K.log K.Warn) (go hane) (K.asmWordEither asmArg)
+  go hane (K.destructIntLike asmArg)
  where
   go h i =
     case i of
@@ -73,8 +75,7 @@ word = \case
     append $ K.Word w
   K.AALong l -> K.do
     K.log K.Note (wordOversizeWarning l)
-    let
-      (llll, hhhh) = K.splitWord32asWord16 l
+    let (llll, hhhh) = K.splitWord32asWord16 l
     append $ K.Word llll
     append $ K.Word hhhh
   K.AAInt i
@@ -89,13 +90,11 @@ byte = \case
   K.AAByte b ->
     append $ K.Byte b
   K.AAWord w -> K.do
-    let
-      (ll, hh) = K.splitWord16 w
+    let (ll, hh) = K.splitWord16 w
     append $ K.Byte ll
     append $ K.Byte hh
   K.AALong l -> K.do
-    let
-      (ll, lh, hl, hh) = K.splitWord32asWord8 l
+    let (ll, lh, hl, hh) = K.splitWord32asWord8 l
     append $ K.Byte ll
     append $ K.Byte lh
     append $ K.Byte hl
@@ -122,10 +121,13 @@ long = \case
 label :: K.ASMArg K.TextLike -> K.Assembly ()
 label = \case
   K.AAExpr expr -> append $ K.TopLevelLabel expr
-  _ -> pure () -- TODO: Do the other cases.
+  _ -> pure ()
 
 val :: K.ASMArg K.TextLike -> K.ASMArg K.IntLike -> K.Assembly ()
-val name value = undefined
+val name value = do
+  let nameText = K.destructTextLike name
+      valueWord = K.destructIntLike value
+  append $ K.Val nameText valueWord
 
 orgUndersizeWarning :: Word8 -> T.Text
 orgUndersizeWarning w8 = "`org` called with 8-bit arg \"" <> T.show w8 <> "\", expected 16-bit."
@@ -134,7 +136,13 @@ wordUndersizeWarning :: Word8 -> T.Text
 wordUndersizeWarning w8 = "`word` called with 8-bit arg \"" <> T.show w8 <> "\", expected 16-bit."
 
 orgOversizeWarning :: Word32 -> T.Text
-orgOversizeWarning w32 = "`org` called with 32-bit arg \"" <> T.show w32 <> "\", expected 16-bit. Ignoring!"
+orgOversizeWarning w32 =
+  "`org` called with 32-bit arg \""
+    <> T.show w32
+    <> "\", expected 16-bit. Ignoring!"
 
 wordOversizeWarning :: Word32 -> T.Text
-wordOversizeWarning w32 = "`word` called with 32-bit arg \"" <> T.show w32 <> "\", expected 16-bit. Writing as two 16-bit words."
+wordOversizeWarning w32 =
+  "`word` called with 32-bit arg \""
+    <> T.show w32
+    <> "\", expected 16-bit. Writing as two 16-bit words."
