@@ -1,22 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE BinaryLiterals #-}
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QualifiedDo #-}
+{-# LANGUAGE RebindableSyntax #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module Main where
 
-import Control.Monad (void)
-import Data.Text qualified as T
+import Prelude (IO, ($))
+import Control.Monad (void, (>>))
+
+import Korigatachi.Assembly.Rebind
 
 import Korigatachi.Assembly.Control
 import Korigatachi.Assembly.Instruction
 import Korigatachi.Assembly.Pattern
-import Korigatachi.Control
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types hiding (zero)
 import Korigatachi qualified as Korigatachi
-import Prelude hiding (and)
-
 {--
 
 ;---------------------------------------------------------------------------
@@ -89,8 +88,8 @@ clock = K.do
   eights
   nines
   org 0xFFFC
-  dc DCWord ("start" :: T.Text)
-  dc DCWord ("start" :: T.Text)
+  word "start"
+  word "start"
 
 
 -- RAM

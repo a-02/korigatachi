@@ -46,7 +46,9 @@ class (forall i j. Functor (f i j)) => IndexedApplicative f where
 (<*>) = ixap
 
 instance (Monoid w, Monad f) => IndexedApplicative (RWIT r w f) where
+  ixpure :: (Monoid w, Monad f) => a -> RWIT r w f i i a
   ixpure a = RWIT $ \_ i -> pure (a, i, mempty)
+  ixap :: (Monoid w, Monad f) => RWIT r w f i j (a -> b) -> RWIT r w f j k a -> RWIT r w f i k b
   ixap fijab fjka = ixbind fijab $ \ab -> ixbind fjka $ \a -> ixpure (ab a)
 
 class IndexedMonad m where

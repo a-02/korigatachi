@@ -1,13 +1,17 @@
 {-# LANGUAGE BinaryLiterals #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE ImportQualifiedPost #-}
-{-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Korigatachi.Types
   ( Operand (..)
@@ -25,6 +29,10 @@ module Korigatachi.Types
   , ASMArg (..)
   , IntLike
   , TextLike
+  , Gukei (..)
+  , ASMBinOp
+  , ASMTag (..)
+  , ASMOp
   , module Atari.Types.Export
   , module Resolve.Types.Export
   )
@@ -92,9 +100,11 @@ data Katteyomi = Katteyomi
   deriving (Generic.Generic)
 
 instance Semigroup Katteyomi where
+  (<>) :: Katteyomi -> Katteyomi -> Katteyomi
   k1 <> k2 = Katteyomi (logs k1 <> logs k2) (codegen k1 <> codegen k2)
 
 instance Monoid Katteyomi where
+  mempty :: Katteyomi
   mempty = Katteyomi "" ""
 
 -- | The list of Statements is constructed in order, so the O(1) append helps a ton.
@@ -135,27 +145,33 @@ data Length = DCByte | DCWord | DCLong deriving (Show)
 data IntLike
 data TextLike
 
+data ASMTag tag where
+  IntTag :: ASMTag IntLike
+  TextTag :: ASMTag TextLike
+
+-- | From the Japanese for "bad shape".
+class Gukei a where
+  gukei :: ASMTag a
+
+instance Gukei IntLike where
+  gukei :: ASMTag IntLike
+  gukei = IntTag
+
+instance Gukei TextLike where
+  gukei :: ASMTag TextLike
+  gukei = TextTag
+
+type family ASMBinOp a b where
+  ASMBinOp IntLike IntLike = IntLike
+  ASMBinOp IntLike TextLike = TextLike
+  ASMBinOp TextLike IntLike = TextLike
+  ASMBinOp TextLike TextLike = TextLike
+
 data ASMArg phantom where
   AAByte :: Word8 -> ASMArg IntLike
   AAWord :: Word16 -> ASMArg IntLike
   AALong :: Word32 -> ASMArg IntLike
   AAInt :: Integer -> ASMArg IntLike
   AAExpr :: T.Text -> ASMArg TextLike
-  
--- instance Num (ASMArg IntLike) where
-  -- (+) :: ASMArg a -> ASMArg a -> ASMArg a
-  -- (+) = _
-  -- (-) :: ASMArg a -> ASMArg a -> ASMArg a
-  -- (-) = _
-  -- (*) :: ASMArg a -> ASMArg a -> ASMArg a
-  -- (*) = _
-  -- negate :: ASMArg a -> ASMArg a
-  -- negate = _
-  -- abs :: ASMArg a -> ASMArg a
-  -- abs = _
-  -- signum :: ASMArg a -> ASMArg a
-  -- signum = _
-  -- fromInteger :: Integer -> ASMArg a
-  -- fromInteger = _
 
--- data Expr =
+type ASMOp = forall a b. (Gukei a, Gukei b) => ASMArg a -> ASMArg b -> ASMArg (ASMBinOp a b)

@@ -1,19 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE RebindableSyntax #-}
 
 module Main where
 
-import Control.Monad (void)
-import Data.Text qualified as T
+import Prelude (IO, ($))
+import Control.Monad (void, (>>))
 
-import Prelude hiding (fromInteger)
-import Data.String hiding (fromString)
-import Korigatachi.Assembly.Rebind (fromInteger, fromString)
+import Korigatachi.Assembly.Rebind
 
 import Korigatachi.Assembly.Control
-import Korigatachi.Control
 import Korigatachi.Assembly.Instruction
 import Korigatachi.Assembly.Pattern
 import Korigatachi.Monad qualified as K

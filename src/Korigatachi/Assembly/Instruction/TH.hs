@@ -13,7 +13,6 @@ import Language.Haskell.TH.Syntax (addModFinalizer, lift)
 
 import Data.Map qualified as Map
 import Data.Text qualified as T
-import Language.Haskell.Meta.Parse qualified as Meta
 
 import Korigatachi.Assembly.Control qualified as K
 import Korigatachi.Assembly.Operand qualified as K
@@ -22,14 +21,6 @@ import Korigatachi.Atari.Types qualified as K
 import Korigatachi.Control qualified as K
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types qualified as K
-
-generateInstructions :: Q [Dec]
-generateInstructions =
-  let source = T.unpack . T.unlines $ concatMap renderInstruction (Map.toList K.allInstructions)
-   in case Meta.parseDecs source of
-        Left err ->
-          error $ "Achievement Unlocked: [Dec]ked out -- Fail to generate functions using parseDecs. " <> err
-        Right decs -> pure decs
 
 instructions :: Q [Dec]
 instructions = concat <$> traverse instructionSplice (Map.toList K.allInstructions)
@@ -152,54 +143,6 @@ instructionSplice (sh, insList) = do
             , clause [conP 'K.AAExpr [varP e]] (normalB exprBody) []
             ]
         ]
-
-renderInstruction :: (K.Shorthand, [K.Instruction]) -> [T.Text]
-renderInstruction (sh, insList) =
-  let lowercased = T.toLower $ T.show sh
-      addressingModes = nub $ sortBy comparePrecedence $ K.addressingMode <$> insList
-      labelAddressingModes =
-        (\x -> "[" <> x <> "]") . T.intercalate "," $
-          ("K.Label" <>) <$> addressingModes `intersect` ["Relative", "Absolute", "Indirect"]
-      hasArity = foldl1 (||) $ addressingModeArity <$> addressingModes
-      parseFnName = "parse" <> (T.show sh)
-      parserAlternatives = foldMap (\addrMode -> "parse" <> addrMode <> " <|> ") addressingModes <> "parseLabel"
-   in case sh of
-        K.JMP ->
-          [ "-- | Jump. "
-          , "jmp :: T.Text -> K.Assembly ()"
-          , "jmp oprText ="
-          , "  let parseJMP = " <> parserAlternatives
-          , -- Aha. Aaaaha.
-            "      stripped = fromMaybe \"\" $ ((snd <$>) . T.uncons) >=> ((fst <$>) . T.unsnoc) $ oprText"
-          , "      firstChar = snd <$> T.unsnoc oprText"
-          , "      lastChar = fst <$> T.uncons oprText"
-          , "   in case Attoparsec.parseOnly parseJMP oprText of"
-          , "        Left _ -> K.log K.Warn (\"Failed to parse operand: \" <> oprText)"
-          , "        Right (K.Label _ lb) ->"
-          , "          if (firstChar == Just \'(\') && (lastChar == Just \')\')"
-          , "          then"
-          , "            K.append $ K.Instruct K." <> (T.show sh) <> " (K.Label [K.LabelIndirect] stripped)"
-          , "          else"
-          , "            K.append $ K.Instruct K." <> (T.show sh) <> " (K.Label [K.LabelAbsolute] lb)"
-          , "        Right parsedOpr -> K.append $ K.Instruct K." <> (T.show sh) <> " parsedOpr"
-          ]
-        _ ->
-          if hasArity
-            then
-              [ "-- | " <> (T.unlines . nub $ (("-- " <>) . K.description) <$> insList)
-              , lowercased <> " :: T.Text -> K.Assembly ()"
-              , lowercased <> " oprText ="
-              , "  let " <> parseFnName <> " = " <> parserAlternatives
-              , "   in case Attoparsec.parseOnly " <> parseFnName <> " oprText of"
-              , "        Left _ -> K.log K.Warn (\"Failed to parse operand: \" <> oprText)"
-              , "        Right (K.Label _ lb) ->"
-              , "          K.append $ K.Instruct K." <> (T.show sh) <> " (K.Label " <> labelAddressingModes <> " lb)"
-              , "        Right parsedOpr -> K.append $ K.Instruct K." <> (T.show sh) <> " parsedOpr"
-              ]
-            else
-              [ lowercased <> " :: K.Assembly ()"
-              , lowercased <> " = K.append $ K.Instruct K." <> (T.show sh) <> " K.Implied"
-              ]
 
 comparePrecedence :: T.Text -> T.Text -> Ordering
 comparePrecedence textA textB = (addressingModePrecedence textA) `compare` (addressingModePrecedence textB)

@@ -1,25 +1,18 @@
-{-# LANGUAGE BinaryLiterals #-}
-{-# LANGUAGE ConstrainedClassMethods #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE ExplicitForAll #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QualifiedDo #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 {- HLINT ignore "Use $>" -}
 
 module Korigatachi.Assembly.Control where
 
-import Data.Word (Word32, Word8)
 import Prelude hiding (and, read)
 
 import Data.Sequence qualified as Seq
-import Data.Text qualified as T
 
 import Korigatachi.Assembly.Control.Internal qualified as K
 import Korigatachi.Assembly.Operand qualified as K
@@ -41,6 +34,9 @@ preamble = K.do
   append $ K.Processor "6502"
   append $ K.Include "vcs.h"
 
+{- | Repeat a certain Hane an `IntLike` amount of times.
+This is pretty inefficient manual recursion. Seek better alternatives!
+-}
 rep :: K.ASMArg K.IntLike -> K.Hane i i () -> K.Hane i i ()
 rep asmArg hane =
   go hane (K.destructIntLike asmArg)
@@ -50,15 +46,21 @@ rep asmArg hane =
       0 -> pure ()
       _ -> K.do
         h
-        go h (i - 1)
+        go h (i Prelude.- 1)
 
+{- | Place the program counter at a certain value.
+This is traditionally 0xF000. It is unadvised to change the org unless you really know what you're doing.
+NOTE: Setting the org to any value below 0x1000 is unadvised and should be avoided.
+All labels are expected to be 16-bit and are resolved with 16-bit addressing modes.
+If you need to specify an 8-bit value to refer to when writing your assembly, use `val` instead.
+-}
 org :: K.ASMArg a -> K.Assembly ()
 org = \case
   K.AAByte b -> K.do
-    K.log K.Note (orgUndersizeWarning b)
+    K.log K.Note (K.orgUndersizeWarning b)
     append $ K.Org (fromIntegral b)
   K.AAWord w -> append $ K.Org w
-  K.AALong l -> K.log K.Warn (orgOversizeWarning l)
+  K.AALong l -> K.log K.Warn (K.orgOversizeWarning l)
   K.AAInt i
     | abs i < 2 ^ (8 :: Integer) -> org (K.AAByte $ fromIntegral i)
     | abs i < 2 ^ (16 :: Integer) -> org (K.AAWord $ fromIntegral i)
@@ -66,15 +68,18 @@ org = \case
     | otherwise -> org (K.AALong $ fromIntegral i)
   K.AAExpr _ -> undefined
 
+-- Write one or more 16-bit unsigned values to the program.
+-- Calling this with oversized values (32-bit, unbounded Integers) will lead to
+-- multiple words being written to the program.
 word :: K.ASMArg a -> K.Assembly ()
 word = \case
   K.AAByte b -> K.do
-    K.log K.Note (wordUndersizeWarning b)
+    K.log K.Note (K.wordUndersizeWarning b)
     append $ K.Word (fromIntegral b)
   K.AAWord w ->
     append $ K.Word w
   K.AALong l -> K.do
-    K.log K.Note (wordOversizeWarning l)
+    K.log K.Note (K.wordOversizeWarning l)
     let (llll, hhhh) = K.splitWord32asWord16 l
     append $ K.Word llll
     append $ K.Word hhhh
@@ -85,6 +90,9 @@ word = \case
     | otherwise -> org (K.AALong $ fromIntegral i)
   K.AAExpr _ -> undefined
 
+-- Write one or more 8-bit unsigned values to the program.
+-- Calling this with oversized values (16-bit, 32-bit, unbounded Integers) will lead to
+-- multiple bytes being written to the program.
 byte :: K.ASMArg a -> K.Assembly ()
 byte = \case
   K.AAByte b ->
@@ -106,6 +114,7 @@ byte = \case
     | otherwise -> org (K.AALong $ fromIntegral i)
   K.AAExpr _ -> undefined
 
+-- | Write a 32-bit unsigned value to the program.
 long :: K.ASMArg a -> K.Assembly ()
 long = \case
   K.AAByte b ->
@@ -118,31 +127,20 @@ long = \case
     append $ K.Long (fromIntegral i)
   K.AAExpr _ -> undefined
 
+{- | A `label` is used to give a textual name to a certain location within the assembly program.
+You can then use these labels to refer to specific portions of the code.
+If you want to assign arbitrary values to arbitrary text, use `val`.
+-}
 label :: K.ASMArg K.TextLike -> K.Assembly ()
-label = \case
-  K.AAExpr expr -> append $ K.TopLevelLabel expr
-  _ -> pure ()
+label = append . K.TopLevelLabel . K.destructTextLike
 
+{- | A `val` is a value assigned to a name. This is used for specifying names for RAM addresses,
+hardware ports, or whatever you want to refer to as text.
+-}
 val :: K.ASMArg K.TextLike -> K.ASMArg K.IntLike -> K.Assembly ()
-val name value = do
-  let nameText = K.destructTextLike name
-      valueWord = K.destructIntLike value
-  append $ K.Val nameText valueWord
+val name value = append $ K.Val (K.destructTextLike name) (K.destructIntLike value)
 
-orgUndersizeWarning :: Word8 -> T.Text
-orgUndersizeWarning w8 = "`org` called with 8-bit arg \"" <> T.show w8 <> "\", expected 16-bit."
-
-wordUndersizeWarning :: Word8 -> T.Text
-wordUndersizeWarning w8 = "`word` called with 8-bit arg \"" <> T.show w8 <> "\", expected 16-bit."
-
-orgOversizeWarning :: Word32 -> T.Text
-orgOversizeWarning w32 =
-  "`org` called with 32-bit arg \""
-    <> T.show w32
-    <> "\", expected 16-bit. Ignoring!"
-
-wordOversizeWarning :: Word32 -> T.Text
-wordOversizeWarning w32 =
-  "`word` called with 32-bit arg \""
-    <> T.show w32
-    <> "\", expected 16-bit. Writing as two 16-bit words."
+(+), (*), (-) :: K.ASMOp
+(+) = K.binaryASMOperation (Prelude.+) "+"
+(-) = K.binaryASMOperation (Prelude.-) "-"
+(*) = K.binaryASMOperation (Prelude.*) "*"
