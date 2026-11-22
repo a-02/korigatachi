@@ -9,6 +9,7 @@ module Korigatachi.Assembly.Instruction.TH where
 import Data.Function ((&))
 import Data.List (intersect, nub, sortBy)
 import Language.Haskell.TH
+import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax (addModFinalizer, lift)
 
 import Data.Map qualified as Map
@@ -21,18 +22,18 @@ import Korigatachi.Atari.Types qualified as K
 import Korigatachi.Control qualified as K
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types qualified as K
-import Language.Haskell.TH.Quote
 
 instructions :: Q [Dec]
 instructions = concat <$> traverse instructionSplice (Map.toList K.allInstructions)
 
 ram :: QuasiQuoter
-ram = QuasiQuoter
-  { quoteExp = const $ fail "no"
-  , quotePat = const $ fail "nuh-uh"
-  , quoteType = const $ fail "nada"
-  , quoteDec = ramDecs
-  }
+ram =
+  QuasiQuoter
+    { quoteExp = const $ fail "no"
+    , quotePat = const $ fail "nuh-uh"
+    , quoteType = const $ fail "nada"
+    , quoteDec = ramDecs
+    }
 
 ramDecs :: String -> Q [Dec]
 ramDecs str = undefined -- Issue 6. A quasiquoter for local variables.
@@ -101,7 +102,6 @@ instructionSplice (sh, insList) = do
         ]
 
 comparePrecedence :: T.Text -> T.Text -> Ordering
-
 comparePrecedence textA textB = (addressingModePrecedence textA) `compare` (addressingModePrecedence textB)
 addressingModeArity :: T.Text -> Bool
 addressingModeArity = \case

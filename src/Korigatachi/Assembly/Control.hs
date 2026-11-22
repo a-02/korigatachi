@@ -144,4 +144,3 @@ val name value = append $ K.Val (K.destructTextLike name) (K.destructIntLike val
 (+) = K.binaryASMOperation (Prelude.+) "+"
 (-) = K.binaryASMOperation (Prelude.-) "-"
 (*) = K.binaryASMOperation (Prelude.*) "*"
-
