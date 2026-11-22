@@ -1,0 +1,3 @@
+packages: .
+
+multi-repl: True

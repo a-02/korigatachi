@@ -3,7 +3,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -12,6 +11,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Korigatachi.Types
   ( Operand (..)
@@ -173,5 +173,11 @@ data ASMArg phantom where
   AALong :: Word32 -> ASMArg IntLike
   AAInt :: Integer -> ASMArg IntLike
   AAExpr :: T.Text -> ASMArg TextLike
+
+deriving instance Eq (ASMArg a)
+
+instance Semigroup (ASMArg TextLike) where
+  (<>) :: ASMArg TextLike -> ASMArg TextLike -> ASMArg TextLike
+  (AAExpr e1) <> (AAExpr e2) = AAExpr (e1 <> e2)
 
 type ASMOp = forall a b. (Gukei a, Gukei b) => ASMArg a -> ASMArg b -> ASMArg (ASMBinOp a b)

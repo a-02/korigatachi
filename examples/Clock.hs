@@ -2,10 +2,12 @@
 {-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE BinaryLiterals #-}
 
 module Main where
 
 import Prelude (IO, ($))
+import Data.Semigroup
 import Control.Monad (void, (>>))
 
 import Korigatachi.Assembly.Rebind
@@ -344,16 +346,16 @@ hsload = K.do
 numblk :: Assembly ()
 numblk = K.do
   label "numblk"
-  wordLabel "zeros" -- dc DCWord ("zeros" :: T.Text)
-  wordLabel "ones"
-  wordLabel "twos"
-  wordLabel "threes"
-  wordLabel "fours"
-  wordLabel "fives"
-  wordLabel "sixes"
-  wordLabel "sevens"
-  wordLabel "eights"
-  wordLabel "nines"
+  word "zeros" 
+  word "ones"
+  word "twos"
+  word "threes"
+  word "fours"
+  word "fives"
+  word "sixes"
+  word "sevens"
+  word "eights"
+  word "nines"
 
 draw :: Assembly ()
 draw = K.do

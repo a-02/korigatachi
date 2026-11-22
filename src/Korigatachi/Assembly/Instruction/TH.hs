@@ -21,65 +21,21 @@ import Korigatachi.Atari.Types qualified as K
 import Korigatachi.Control qualified as K
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types qualified as K
+import Language.Haskell.TH.Quote
 
 instructions :: Q [Dec]
 instructions = concat <$> traverse instructionSplice (Map.toList K.allInstructions)
 
-addressingModeArity :: T.Text -> Bool
-addressingModeArity = \case
-  "Accumulator" -> False
-  "Implied" -> False
-  "Immediate" -> True
-  "IndirectX" -> True
-  "IndirectY" -> True
-  "Relative" -> True
-  "ZeroPage" -> True
-  "ZeroPageX" -> True
-  "ZeroPageY" -> True
-  "Absolute" -> True
-  "AbsoluteX" -> True
-  "AbsoluteY" -> True
-  "Indirect" -> True
-  "Label" -> True
-  _ -> False
+ram :: QuasiQuoter
+ram = QuasiQuoter
+  { quoteExp = const $ fail "no"
+  , quotePat = const $ fail "nuh-uh"
+  , quoteType = const $ fail "nada"
+  , quoteDec = ramDecs
+  }
 
-addressingModeIs8Bit :: T.Text -> Bool
-addressingModeIs8Bit = \case
-  "Accumulator" -> True
-  "Immediate" -> True
-  "IndirectX" -> True
-  "IndirectY" -> True
-  "Relative" -> True
-  "ZeroPage" -> True
-  "ZeroPageX" -> True
-  "ZeroPageY" -> True
-  _ -> False
-
-addressingModeIs16Bit :: T.Text -> Bool
-addressingModeIs16Bit = \case
-  "Absolute" -> True
-  "AbsoluteX" -> True
-  "AbsoluteY" -> True
-  "Indirect" -> True
-  _ -> False
-
-addressingModePrecedence :: T.Text -> Int
-addressingModePrecedence = \case
-  "IndirectX" -> 1
-  "IndirectY" -> 2
-  "ZeroPageX" -> 3
-  "ZeroPageY" -> 4
-  "Relative" -> 5
-  "ZeroPage" -> 6
-  "Absolute" -> 7
-  "AbsoluteX" -> 8
-  "AbsoluteY" -> 9
-  "Indirect" -> 10
-  "Immediate" -> 11
-  "Implied" -> 12
-  "Accumulator" -> 13
-  "Label" -> maxBound -- Redundant, but nice to have.
-  _ -> maxBound
+ramDecs :: String -> Q [Dec]
+ramDecs str = undefined -- Issue 6. A quasiquoter for local variables.
 
 instructionSplice :: (K.Shorthand, [K.Instruction]) -> Q [Dec]
 instructionSplice (sh, insList) = do
@@ -145,4 +101,40 @@ instructionSplice (sh, insList) = do
         ]
 
 comparePrecedence :: T.Text -> T.Text -> Ordering
+
 comparePrecedence textA textB = (addressingModePrecedence textA) `compare` (addressingModePrecedence textB)
+addressingModeArity :: T.Text -> Bool
+addressingModeArity = \case
+  "Accumulator" -> False
+  "Implied" -> False
+  "Immediate" -> True
+  "IndirectX" -> True
+  "IndirectY" -> True
+  "Relative" -> True
+  "ZeroPage" -> True
+  "ZeroPageX" -> True
+  "ZeroPageY" -> True
+  "Absolute" -> True
+  "AbsoluteX" -> True
+  "AbsoluteY" -> True
+  "Indirect" -> True
+  "Label" -> True
+  _ -> False
+
+addressingModePrecedence :: T.Text -> Int
+addressingModePrecedence = \case
+  "IndirectX" -> 1
+  "IndirectY" -> 2
+  "ZeroPageX" -> 3
+  "ZeroPageY" -> 4
+  "Relative" -> 5
+  "ZeroPage" -> 6
+  "Absolute" -> 7
+  "AbsoluteX" -> 8
+  "AbsoluteY" -> 9
+  "Indirect" -> 10
+  "Immediate" -> 11
+  "Implied" -> 12
+  "Accumulator" -> 13
+  "Label" -> maxBound -- Redundant, but nice to have.
+  _ -> maxBound

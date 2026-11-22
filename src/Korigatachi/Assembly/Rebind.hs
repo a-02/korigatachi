@@ -15,3 +15,6 @@ fromInteger i
 
 fromString :: String -> ASMArg TextLike
 fromString str = AAExpr (T.pack str)
+
+(==) :: Eq a => a -> a -> Bool
+(==) = (Prelude.==)
