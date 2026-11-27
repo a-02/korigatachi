@@ -1,4 +1,4 @@
-:set -Weverything
 :set -Werror
+:set -Wdefault
 :set -Wno-name-shadowing
 

@@ -61,6 +61,7 @@ library
     default-language: Haskell2010
     default-extensions:
         ImportQualifiedPost
+        
 
 -- executable korigatachi
 --     import:           warnings

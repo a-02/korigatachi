@@ -7,8 +7,9 @@
 module Korigatachi.Assembly.Instruction.TH where
 
 import Data.Function ((&))
-import Data.List (intersect, nub, sortBy)
+import Data.List (intersect, nub, sort, sortBy)
 import Language.Haskell.TH
+import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax (addModFinalizer, lift)
 
 import Data.Map qualified as Map
@@ -21,22 +22,25 @@ import Korigatachi.Atari.Types qualified as K
 import Korigatachi.Control qualified as K
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types qualified as K
-import Language.Haskell.TH.Quote
 
 instructions :: Q [Dec]
 instructions = concat <$> traverse instructionSplice (Map.toList K.allInstructions)
 
 ram :: QuasiQuoter
-ram = QuasiQuoter
-  { quoteExp = const $ fail "no"
-  , quotePat = const $ fail "nuh-uh"
-  , quoteType = const $ fail "nada"
-  , quoteDec = ramDecs
-  }
+ram =
+  QuasiQuoter
+    { quoteExp = const $ fail "no"
+    , quotePat = const $ fail "nuh-uh"
+    , quoteType = const $ fail "nada"
+    , quoteDec = ramDecs
+    }
 
 ramDecs :: String -> Q [Dec]
 ramDecs str = undefined -- Issue 6. A quasiquoter for local variables.
 
+{- | Construct an ASM mnemonic from a shorthand and a list of valid instructions.
+This is an internal function, and should not be called by end users.
+-}
 instructionSplice :: (K.Shorthand, [K.Instruction]) -> Q [Dec]
 instructionSplice (sh, insList) = do
   let shE = lift sh
@@ -52,11 +56,11 @@ instructionSplice (sh, insList) = do
           & T.unpack
       addressingModes =
         (K.addressingMode <$> insList)
-          & sortBy comparePrecedence
+          & sort
           & nub
       hasArity = any addressingModeArity addressingModes
-      byteRelevantAddressingModes = ["Immediate", "Relative", "ZeroPage"]
-      wordRelevantAddressingModes = ["Absolute", "Indirect"]
+      byteRelevantAddressingModes = [K.AMImmediate, K.AMRelative, K.AMZeroPage]
+      wordRelevantAddressingModes = [K.AMAbsolute, K.AMIndirect]
   case hasArity of
     False -> do
       addModFinalizer $ putDoc (DeclDoc fnName) docString
@@ -66,11 +70,13 @@ instructionSplice (sh, insList) = do
         ]
     True -> do
       addModFinalizer $ putDoc (DeclDoc fnName) docString
+      -- \^ `addModFinalizer` allows you to reference function names
+      -- after type-checking.
       [b, w, l, i, e] <- traverse newName ["b", "w", "l", "i", "e"]
-      let byteBody x = [|K.append $ K.Instruct $shE $(appsE [conE $ mkName ("K." <> T.unpack x), varE b])|]
+      let byteBody x = [|K.append $ K.Instruct $shE $(appsE [conE $ mkName ("K." <> show x), varE b])|]
           wordBody x =
             [|
-              let (ll, hh) = K.splitWord16 $(varE w) in K.append $ K.Instruct $shE ($(conE (mkName ("K." <> T.unpack x))) ll hh)
+              let (ll, hh) = K.splitWord16 $(varE w) in K.append $ K.Instruct $shE ($(conE (mkName ("K." <> show x))) ll hh)
               |]
           byteClause = case addressingModes `intersect` byteRelevantAddressingModes of
             (x : _) ->
@@ -90,7 +96,8 @@ instructionSplice (sh, insList) = do
               |]
       sequence
         [ sigD fnName [t|K.ASMArg $(varT (mkName "a")) -> K.Assembly ()|]
-        , funD
+        , -- asm :: K.ASMArg a -> K.Assembly ()
+          funD
             fnName
             [ byteClause
             , wordClause
@@ -100,41 +107,18 @@ instructionSplice (sh, insList) = do
             ]
         ]
 
-comparePrecedence :: T.Text -> T.Text -> Ordering
-
-comparePrecedence textA textB = (addressingModePrecedence textA) `compare` (addressingModePrecedence textB)
-addressingModeArity :: T.Text -> Bool
+addressingModeArity :: K.AddressingMode -> Bool
 addressingModeArity = \case
-  "Accumulator" -> False
-  "Implied" -> False
-  "Immediate" -> True
-  "IndirectX" -> True
-  "IndirectY" -> True
-  "Relative" -> True
-  "ZeroPage" -> True
-  "ZeroPageX" -> True
-  "ZeroPageY" -> True
-  "Absolute" -> True
-  "AbsoluteX" -> True
-  "AbsoluteY" -> True
-  "Indirect" -> True
-  "Label" -> True
+  K.AMImmediate -> True
+  K.AMIndirectX -> True
+  K.AMIndirectY -> True
+  K.AMRelative -> True
+  K.AMZeroPage -> True
+  K.AMZeroPageX -> True
+  K.AMZeroPageY -> True
+  K.AMAbsolute -> True
+  K.AMAbsoluteX -> True
+  K.AMAbsoluteY -> True
+  K.AMIndirect -> True
+  K.AMUnresolved -> True
   _ -> False
-
-addressingModePrecedence :: T.Text -> Int
-addressingModePrecedence = \case
-  "IndirectX" -> 1
-  "IndirectY" -> 2
-  "ZeroPageX" -> 3
-  "ZeroPageY" -> 4
-  "Relative" -> 5
-  "ZeroPage" -> 6
-  "Absolute" -> 7
-  "AbsoluteX" -> 8
-  "AbsoluteY" -> 9
-  "Indirect" -> 10
-  "Immediate" -> 11
-  "Implied" -> 12
-  "Accumulator" -> 13
-  "Label" -> maxBound -- Redundant, but nice to have.
-  _ -> maxBound

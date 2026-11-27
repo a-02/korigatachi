@@ -1,44 +1,48 @@
-{-# LANGUAGE BinaryLiterals #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE StandaloneDeriving #-}
 
 module Korigatachi.Types
-  ( Operand (..)
-  , Statement (..)
-  , Hane
-  , Assembly
-  , Katteyomi (..)
-  , Assemble (..)
-  , Resolve (..)
-  , Bin (..)
-  , Env (..)
-  , LogLevel (..)
-  , BaseRepresentation (..)
-  , Length (..)
+  ( AddressingMode (..)
   , ASMArg (..)
-  , IntLike
-  , TextLike
-  , Gukei (..)
   , ASMBinOp
   , ASMTag (..)
   , ASMOp
-  , module Atari.Types.Export
+  , Assembly
+  , BaseRepresentation (..)
+  , Bin (..)
+  , Env (..)
+  , Gukei (..)
+  , Hane
+  , Instruction (..)
+  , IntLike
+  , Katteyomi (..)
+  , Length (..)
+  , LogLevel (..)
+  , Operand (..)
+  , Resolver (..)
+  , Shorthand (..)
+  , Statement (..)
+  , Statements (..)
+  , TextLike
   , module Resolve.Types.Export
   )
 where
 
 import Data.Word (Word16, Word32, Word8)
+import Language.Haskell.TH.Syntax (Lift)
 import Prelude hiding (break)
 
 import Data.ByteString qualified as BS
@@ -46,11 +50,10 @@ import Data.Sequence qualified as Seq
 import Data.Text qualified as T
 import GHC.Generics qualified as Generic
 
-import Korigatachi.Atari.Types as Atari.Types.Export
 import Korigatachi.Monad
 import Korigatachi.Resolve.Types as Resolve.Types.Export
 
--- | Something.
+-- | An `Operand` represents an argument along with its addressing mode..
 data Operand
   = Accumulator
   | Implied
@@ -68,6 +71,60 @@ data Operand
   | Unresolved T.Text
   deriving (Eq, Ord, Show)
 
+data AddressingMode
+  = AMAccumulator
+  | AMImplied
+  | AMImmediate
+  | AMIndirectX
+  | AMIndirectY
+  | AMRelative
+  | AMZeroPage
+  | AMZeroPageX
+  | AMZeroPageY
+  | AMAbsolute
+  | AMAbsoluteX
+  | AMAbsoluteY
+  | AMIndirect
+  | AMUnresolved
+  deriving (Eq)
+
+instance Ord AddressingMode where
+  (<=) am1 am2 =
+    let addressingModePrecedence :: AddressingMode -> Int
+        addressingModePrecedence = \case
+          AMIndirectX -> 1
+          AMIndirectY -> 2
+          AMZeroPageX -> 3
+          AMZeroPageY -> 4
+          AMRelative -> 5
+          AMZeroPage -> 6
+          AMAbsolute -> 7
+          AMAbsoluteX -> 8
+          AMAbsoluteY -> 9
+          AMIndirect -> 10
+          AMImmediate -> 11
+          AMImplied -> 12
+          AMAccumulator -> 13
+          _ -> maxBound
+     in (addressingModePrecedence am1) <= (addressingModePrecedence am2)
+
+instance Show AddressingMode where
+  show = \case
+    AMIndirectX -> "IndirectX"
+    AMIndirectY -> "IndirectY"
+    AMZeroPageX -> "ZeroPageX"
+    AMZeroPageY -> "ZeroPageY"
+    AMRelative -> "Relative"
+    AMZeroPage -> "ZeroPage"
+    AMAbsolute -> "Absolute"
+    AMAbsoluteX -> "AbsoluteX"
+    AMAbsoluteY -> "AbsoluteY"
+    AMIndirect -> "Indirect"
+    AMImmediate -> "Immediate"
+    AMImplied -> "Implied"
+    AMAccumulator -> "Accumulator"
+
+-- | A statement is a single line of assembly.
 data Statement
   = Local Word T.Text
   | Org Word16
@@ -90,7 +147,7 @@ type Hane start end return = RWIT Env Katteyomi IO start end return
 to build assembly programs. Every other pass is something the user does not need to worry
 about. The first pass translates the DSL into our internal Seq.Seq Statement.
 -}
-type Assembly a = Hane Assemble Assemble a
+type Assembly a = Hane Statements Statements a
 
 -- | From the Japanese for "selfish reading". The data structure for the writer.
 data Katteyomi = Katteyomi
@@ -107,15 +164,15 @@ instance Monoid Katteyomi where
   mempty :: Katteyomi
   mempty = Katteyomi "" ""
 
--- | The list of Statements is constructed in order, so the O(1) append helps a ton.
-data Assemble = Assemble {assemble :: Seq.Seq Statement}
+-- | The list of Statement is constructed in order, so the O(1) append helps a ton.
+data Statements = Statements {statements :: Seq.Seq Statement}
   deriving (Show)
 
-data Resolve = Resolve
-  { resolveStatements :: Seq.Seq Statement
-  , resolveLabels :: Seq.Seq (Word16, T.Text)
-  , resolveCodegen :: Seq.Seq T.Text
-  , resolveProgramCounter :: Word16
+data Resolver = Resolver
+  { resolverStatements :: Seq.Seq Statement
+  , resolverLabels :: Seq.Seq (Word16, T.Text)
+  , resolverCodegen :: Seq.Seq T.Text
+  , resolverProgramCounter :: Word16
   }
   deriving (Show)
 
@@ -181,3 +238,92 @@ instance Semigroup (ASMArg TextLike) where
   (AAExpr e1) <> (AAExpr e2) = AAExpr (e1 <> e2)
 
 type ASMOp = forall a b. (Gukei a, Gukei b) => ASMArg a -> ASMArg b -> ASMArg (ASMBinOp a b)
+
+data Instruction = Instruction
+  { shorthand :: Shorthand
+  , addressingMode :: AddressingMode
+  , opcode :: Word8
+  , bytes :: Int
+  , cycles :: Int
+  , description :: T.Text
+  }
+  deriving (Show)
+
+data Shorthand
+  = ADC
+  | ANC
+  | AND
+  | ANE
+  | ALR
+  | ARR
+  | ASL
+  | BCC
+  | BCS
+  | BEQ
+  | BIT
+  | BMI
+  | BNE
+  | BPL
+  | BRK
+  | BVC
+  | BVS
+  | CLC
+  | CLD -- Done.
+  | CLI
+  | CLV
+  | CMP
+  | CPX
+  | CPY
+  | DCP
+  | DEC
+  | DEX
+  | DEY
+  | EOR
+  | INC
+  | INX
+  | INY
+  | ISC
+  | JAM
+  | JMP
+  | JSR
+  | LAS
+  | LAX
+  | LDA -- Done.
+  | LDX -- Done.
+  | LDY -- Done.
+  | LSR
+  | LXA
+  | NOP
+  | ORA
+  | PHA
+  | PHP
+  | PLA
+  | PLP
+  | RLA
+  | ROL
+  | ROR
+  | RRA
+  | RTI
+  | RTS
+  | SAX
+  | SBC
+  | SBX
+  | SEC
+  | SED
+  | SEI -- Done.
+  | SHA
+  | SHY
+  | SLO
+  | SRE
+  | STA -- Done.
+  | STX
+  | STY
+  | TAS
+  | TAX
+  | TAY
+  | TSX
+  | TXA
+  | TXS -- Done?
+  | TYA
+  | UBC
+  deriving (Eq, Ord, Show, Enum, Bounded, Lift)

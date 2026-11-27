@@ -31,67 +31,69 @@ import Korigatachi.Control qualified as K
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types qualified as K
 
-resolve :: K.Hane K.Assemble K.Resolve ()
+resolve :: K.Hane K.Statements K.Resolver ()
 resolve = K.do
-  (K.Assemble statements) <- K.get
-  -- Neat trick!
-  K.log K.Info "Pass 1 of 4 completed."
-  K.put $
-    K.Resolve
-      { K.resolveStatements = statements
-      , K.resolveLabels = Seq.empty
-      , K.resolveCodegen = Seq.empty
-      , K.resolveProgramCounter = 0
-      }
-  let indexedStatements = Seq.zip (Seq.fromList [(0 :: Int) .. 65535]) statements
+  (K.Statements statements) <- K.get
+  undefined
 
-      -- \| Turn our list of statements into text.
-      resolveCodegenHane :: K.Statement -> K.Hane K.Resolve K.Resolve ()
-      resolveCodegenHane statement = K.do
-        K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveCodegen = resolveCodegen Seq.|> renderStatement statement}
+-- Neat trick!
+-- K.log K.Info "Pass 1 of 4 completed."
+-- K.put $
+--   K.Resolve
+--     { K.resolveStatements = statements
+--     , K.resolveLabels = Seq.empty
+--     , K.resolveCodegen = Seq.empty
+--     , K.resolveProgramCounter = 0
+--     }
+-- let indexedStatements = Seq.zip (Seq.fromList [(0 :: Int) .. 65535]) statements
 
-      resolveTopLevelLabelHane :: Int -> K.Statement -> K.Hane K.Resolve K.Resolve ()
-      resolveTopLevelLabelHane statementIndex statement = K.do
-        case statement of
-          K.Org w16 -> K.modify $ \rsv -> rsv {K.resolveProgramCounter = w16 + 1} -- Why do I need to do this?
-          K.TopLevelLabel label -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveLabels = resolveLabels Seq.|> (resolveProgramCounter, label)}
-          K.Long _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 4}
-          K.Pointer _ _ _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 4}
-          K.Word _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 2}
-          K.Byte _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 1}
-          K.Instruct sh opr ->
-            case opr of
-              K.Unresolved lb -> K.do
-                labels <- K.resolveLabels <$> K.get
-                res <- resolveLabel labels lb
-                K.modify $ \rsv@(K.Resolve {..}) ->
-                  rsv
-                    { K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr
-                    , K.resolveStatements =
-                        Seq.update statementIndex (K.Instruct sh res) resolveStatements
-                    }
-              _ ->
-                K.modify $ \rsv@(K.Resolve {..}) ->
-                  rsv
-                    { K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr
-                    }
-          _ -> pure ()
+--     -- \| Turn our list of statements into text.
+--     resolveCodegenHane :: K.Statement -> K.Hane K.Resolve K.Resolve ()
+--     resolveCodegenHane statement = K.do
+--       K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveCodegen = resolveCodegen Seq.|> renderStatement statement}
 
-  traverse_ resolveCodegenHane statements -- Technically, this is Pass 2.
-  K.log K.Info "Pass 2 of 3 completed."
-  traverse_ (uncurry resolveTopLevelLabelHane) indexedStatements -- Technically, this is Pass 3.
-  K.log K.Info "Pass 3 of 3 completed."
-  assembly <- K.resolveCodegen <$> K.get
-  K.codeGen $ T.unlines $ toList assembly
-  K.log K.Info "Codegen written."
-  pure ()
+--     resolveTopLevelLabelHane :: Int -> K.Statement -> K.Hane K.Resolve K.Resolve ()
+--     resolveTopLevelLabelHane statementIndex statement = K.do
+--       case statement of
+--         K.Org w16 -> K.modify $ \rsv -> rsv {K.resolveProgramCounter = w16 + 1} -- Why do I need to do this?
+--         K.TopLevelLabel label -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveLabels = resolveLabels Seq.|> (resolveProgramCounter, label)}
+--         K.Long _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 4}
+--         K.Pointer _ _ _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 4}
+--         K.Word _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 2}
+--         K.Byte _ -> K.modify $ \rsv@(K.Resolve {..}) -> rsv {K.resolveProgramCounter = resolveProgramCounter + 1}
+--         K.Instruct sh opr ->
+--           case opr of
+--             K.Unresolved lb -> K.do
+--               labels <- K.resolveLabels <$> K.get
+--               res <- resolveLabel labels lb
+--               K.modify $ \rsv@(K.Resolve {..}) ->
+--                 rsv
+--                   { K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr
+--                   , K.resolveStatements =
+--                       Seq.update statementIndex (K.Instruct sh res) resolveStatements
+--                   }
+--             _ ->
+--               K.modify $ \rsv@(K.Resolve {..}) ->
+--                 rsv
+--                   { K.resolveProgramCounter = resolveProgramCounter + operandToProgramCount opr
+--                   }
+--         _ -> pure ()
+
+-- traverse_ resolveCodegenHane statements -- Technically, this is Pass 2.
+-- K.log K.Info "Pass 2 of 3 completed."
+-- traverse_ (uncurry resolveTopLevelLabelHane) indexedStatements -- Technically, this is Pass 3.
+-- K.log K.Info "Pass 3 of 3 completed."
+-- assembly <- K.resolveCodegen <$> K.get
+-- K.codeGen $ T.unlines $ toList assembly
+-- K.log K.Info "Codegen written."
+-- pure ()
 
 -- | Refers to labels in the past AND future!
 resolveLabel
   :: Seq.Seq (Word16, T.Text)
   -- -> [K.LabelAddressing]
   -> T.Text
-  -> K.Hane K.Resolve K.Resolve K.Operand
+  -> K.Hane K.Resolver K.Resolver K.Operand
 resolveLabel labels toResolve = undefined
 
 -- pc <- K.resolveProgramCounter <$> K.get

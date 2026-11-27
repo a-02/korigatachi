@@ -22,7 +22,7 @@ import Korigatachi.Types qualified as K
 
 append :: K.Statement -> K.Assembly ()
 append statement =
-  K.modify $ \(K.Assemble s) -> K.Assemble $ s Seq.|> statement
+  K.modify $ \(K.Statements s) -> K.Statements $ s Seq.|> statement
 
 {- | The start of a valid Atari 2600 asm file.
 Korigatachi is meant to not only assemble Atari machine code
@@ -144,4 +144,3 @@ val name value = append $ K.Val (K.destructTextLike name) (K.destructIntLike val
 (+) = K.binaryASMOperation (Prelude.+) "+"
 (-) = K.binaryASMOperation (Prelude.-) "-"
 (*) = K.binaryASMOperation (Prelude.*) "*"
-
