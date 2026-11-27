@@ -17,6 +17,8 @@ import Data.Text qualified as T
 import Data.Vector.Sized qualified as Sized
 import GHC.Generics qualified as Generic
 
+import Korigatachi.Types
+
 data Atari = Atari
   { ram :: Memory
   -- ^ A whopping 128 bytes of RAM.
@@ -42,16 +44,6 @@ We can't even use some of these, maybe some type level
 synonym is in order that has a list of fields we can't use.
 -}
 type Memory = Sized.Vector 128 Word8
-
-data Instruction = Instruction
-  { shorthand :: Shorthand
-  , addressingMode :: T.Text
-  , opcode :: Word8
-  , bytes :: Int
-  , cycles :: Int
-  , description :: T.Text
-  }
-  deriving (Show)
 
 data Flags = Flags
   { negative :: Bool
@@ -265,82 +257,3 @@ data MemoryLabel = MemoryLabel
   { labelText :: T.Text
   , labelByte :: Word16
   }
-
-data Shorthand
-  = ADC
-  | ANC
-  | AND
-  | ANE
-  | ALR
-  | ARR
-  | ASL
-  | BCC
-  | BCS
-  | BEQ
-  | BIT
-  | BMI
-  | BNE
-  | BPL
-  | BRK
-  | BVC
-  | BVS
-  | CLC
-  | CLD -- Done.
-  | CLI
-  | CLV
-  | CMP
-  | CPX
-  | CPY
-  | DCP
-  | DEC
-  | DEX
-  | DEY
-  | EOR
-  | INC
-  | INX
-  | INY
-  | ISC
-  | JAM
-  | JMP
-  | JSR
-  | LAS
-  | LAX
-  | LDA -- Done.
-  | LDX -- Done.
-  | LDY -- Done.
-  | LSR
-  | LXA
-  | NOP
-  | ORA
-  | PHA
-  | PHP
-  | PLA
-  | PLP
-  | RLA
-  | ROL
-  | ROR
-  | RRA
-  | RTI
-  | RTS
-  | SAX
-  | SBC
-  | SBX
-  | SEC
-  | SED
-  | SEI -- Done.
-  | SHA
-  | SHY
-  | SLO
-  | SRE
-  | STA -- Done.
-  | STX
-  | STY
-  | TAS
-  | TAX
-  | TAY
-  | TSX
-  | TXA
-  | TXS -- Done?
-  | TYA
-  | UBC
-  deriving (Eq, Ord, Show, Enum, Bounded, Lift)

@@ -26,9 +26,9 @@ import Korigatachi.Control qualified as K
 import Korigatachi.Monad qualified as K
 import Korigatachi.Types qualified as K
 
-bin :: K.Hane K.Resolve K.Bin ()
+bin :: K.Hane K.Resolver K.Bin ()
 bin = K.do
-  (K.Resolve {..}) <- K.get
+  (K.Resolver {..}) <- K.get
   K.log K.Info "Generating binary..."
   K.put $ K.Bin {K.binOutput = BS.empty}
   let word12 :: Word16 -> Word16
@@ -59,13 +59,13 @@ bin = K.do
             K.modify $ \bn@(K.Bin {..}) ->
               bn {K.binOutput = binOutput <> (instructBinary sh opr)}
           _ -> pure ()
-  traverse_ genBinary resolveStatements
+  traverse_ genBinary resolverStatements
   K.log K.Info "Binary generated. Have a nice day."
 
 instructBinary :: K.Shorthand -> K.Operand -> BS.ByteString
 instructBinary sh opr =
   BS.pack $
-    let oprName = operandToAddrModeName opr
+    let oprName = operandToAddrMode opr
      in case K.allInstructions Map.!? sh of
           Nothing -> [0x00]
           Just instructions ->
@@ -73,21 +73,21 @@ instructBinary sh opr =
               [] -> [0x00]
               (ins : _) -> [ins.opcode] <> operandToWord8sLE opr
 
-operandToAddrModeName :: K.Operand -> T.Text
-operandToAddrModeName K.Accumulator = "Accumulator"
-operandToAddrModeName K.Implied = "Implied"
-operandToAddrModeName (K.Immediate _) = "Immediate"
-operandToAddrModeName (K.IndirectX _) = "IndirectX"
-operandToAddrModeName (K.IndirectY _) = "IndirectY"
-operandToAddrModeName (K.Relative _) = "Relative"
-operandToAddrModeName (K.ZeroPage _) = "ZeroPage"
-operandToAddrModeName (K.ZeroPageX _) = "ZeroPageX"
-operandToAddrModeName (K.ZeroPageY _) = "ZeroPageY"
-operandToAddrModeName (K.Absolute _ _) = "Absolute"
-operandToAddrModeName (K.AbsoluteX _ _) = "AbsoluteX"
-operandToAddrModeName (K.AbsoluteY _ _) = "AbsoluteY"
-operandToAddrModeName (K.Indirect _ _) = "Indirect"
-operandToAddrModeName _ = ""
+operandToAddrMode :: K.Operand -> K.AddressingMode
+operandToAddrMode K.Accumulator = K.AMAccumulator
+operandToAddrMode K.Implied = K.AMImplied
+operandToAddrMode (K.Immediate _) = K.AMImmediate
+operandToAddrMode (K.IndirectX _) = K.AMIndirectX
+operandToAddrMode (K.IndirectY _) = K.AMIndirectY
+operandToAddrMode (K.Relative _) = K.AMRelative
+operandToAddrMode (K.ZeroPage _) = K.AMZeroPage
+operandToAddrMode (K.ZeroPageX _) = K.AMZeroPageX
+operandToAddrMode (K.ZeroPageY _) = K.AMZeroPageY
+operandToAddrMode (K.Absolute _ _) = K.AMAbsolute
+operandToAddrMode (K.AbsoluteX _ _) = K.AMAbsoluteX
+operandToAddrMode (K.AbsoluteY _ _) = K.AMAbsoluteY
+operandToAddrMode (K.Indirect _ _) = K.AMIndirect
+operandToAddrMode _ = K.AMUnresolved
 
 operandToWord8sLE :: K.Operand -> [Word8]
 operandToWord8sLE K.Accumulator = []
